@@ -93,12 +93,21 @@ public final class MoveNotationService {
 
     private Set<String> acceptedNotations(Position position, Move move, List<Move> legalMoves) {
         Set<String> accepted = new HashSet<>();
+        Piece piece = position.board().pieceAt(move.from()).orElseThrow();
+
         accepted.add(normalize(move.uci()));
         accepted.add(normalize(toNotation(position, move, NotationLanguage.ENGLISH, legalMoves)));
         accepted.add(normalize(toNotation(position, move, NotationLanguage.SPANISH, legalMoves)));
         accepted.add(normalize(toNotation(position, move, NotationLanguage.ENGLISH, legalMoves).replace("x", "")));
         accepted.add(normalize(toNotation(position, move, NotationLanguage.SPANISH, legalMoves).replace("x", "")));
-        accepted.add(normalize(simpleCoordinate(move)));
+
+        if (piece.type() == PieceType.PAWN) {
+            accepted.add(normalize(simpleCoordinate(move)));
+            accepted.add(normalize("P" + simpleCoordinate(move)));
+            accepted.add(normalize("P" + toNotation(position, move, NotationLanguage.ENGLISH, legalMoves)));
+            accepted.add(normalize("P" + toNotation(position, move, NotationLanguage.SPANISH, legalMoves)));
+        }
+
         return accepted;
     }
 

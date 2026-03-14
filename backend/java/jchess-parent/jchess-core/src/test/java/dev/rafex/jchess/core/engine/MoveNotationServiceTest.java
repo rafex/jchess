@@ -34,6 +34,15 @@ final class MoveNotationServiceTest {
     }
 
     @Test
+    void shouldPreferPawnForBareDestinationSquare() {
+        Position position = FenCodec.parse("rnb1kbnr/pppp1ppp/4pq2/8/4P3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 3");
+        List<Move> legalMoves = generator.generateLegalMoves(position);
+
+        assertEquals("d2d3", notationService.parse(position, "d3", legalMoves).uci());
+        assertEquals("d2d3", notationService.parse(position, "Pd3", legalMoves).uci());
+    }
+
+    @Test
     void shouldMarkCheckInNotation() {
         Position position = FenCodec.parse("4k3/8/8/8/8/8/8/6RK w - - 0 1");
         List<Move> legalMoves = generator.generateLegalMoves(position);

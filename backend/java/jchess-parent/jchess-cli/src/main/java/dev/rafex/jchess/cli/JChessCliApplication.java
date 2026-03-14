@@ -24,10 +24,17 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class JChessCliApplication {
+    private static final String RESET = "\u001B[0m";
+    private static final String CYAN = "\u001B[38;5;45m";
+    private static final String GOLD = "\u001B[38;5;220m";
+    private static final String ORANGE = "\u001B[38;5;208m";
+    private static final String GREEN = "\u001B[38;5;82m";
+
     private JChessCliApplication() {
     }
 
     public static void main(String[] args) throws Exception {
+        printBanner();
         CliCommand cliCommand = CliCommand.parse(args);
         EngineFacade engineFacade = createEngine(cliCommand.databasePath());
 
@@ -223,6 +230,20 @@ public final class JChessCliApplication {
                 Legacy compatibility:
                   --start-game, --move, --interactive, --undo, --resign, --pgn, --server
                 """;
+    }
+
+    private static void printBanner() {
+        System.out.println(CYAN + """
+                  ██╗ ██████╗██╗  ██╗███████╗███████╗███████╗
+                  ██║██╔════╝██║  ██║██╔════╝██╔════╝██╔════╝
+                  ██║██║     ███████║█████╗  ███████╗███████╗
+             ██   ██║██║     ██╔══██║██╔══╝  ╚════██║╚════██║
+             ╚█████╔╝╚██████╗██║  ██║███████╗███████║███████║
+              ╚════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
+                """ + RESET);
+        System.out.println(GOLD + "  by rafex" + RESET + "  " + ORANGE + "Created: 2026-03-13" + RESET);
+        System.out.println(GREEN + "  Java 21 chess engine • CLI • SQLite • WebSocket" + RESET);
+        System.out.println();
     }
 
     private static String interactiveHelpText() {
