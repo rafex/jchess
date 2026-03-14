@@ -1,0 +1,4 @@
+/jchess-parent/**/target/
+/jchess-parent/*.db
+/jchess-parent/*.log
+
