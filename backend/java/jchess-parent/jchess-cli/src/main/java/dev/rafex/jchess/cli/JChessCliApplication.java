@@ -4,6 +4,8 @@ import dev.rafex.jchess.adapter.llm.HttpMachineMoveClient;
 import dev.rafex.jchess.adapter.sqlite.SqliteGameRepository;
 import dev.rafex.jchess.application.ChessEngineService;
 import dev.rafex.jchess.application.EngineFacade;
+import dev.rafex.jchess.core.engine.BoardAsciiRenderer;
+import dev.rafex.jchess.core.engine.BoardTheme;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.LlmProvider;
@@ -37,21 +39,23 @@ public final class JChessCliApplication {
         printBanner();
         CliCommand cliCommand = CliCommand.parse(args);
         EngineFacade engineFacade = createEngine(cliCommand.databasePath());
+        BoardAsciiRenderer boardRenderer = new BoardAsciiRenderer();
 
         switch (cliCommand.action()) {
             case HELP -> System.out.println(helpText());
+            case LIST_THEMES -> printThemes(boardRenderer, cliCommand.boardTheme());
             case SERVER_START -> new JChessWebSocketServer(engineFacade, cliCommand.port()).startAndBlock();
-            case GAME_NEW -> handleGameNew(engineFacade, cliCommand);
-            case GAME_SHOW -> renderFullSnapshot(engineFacade.loadGame(requireSession(cliCommand)));
-            case GAME_MOVE -> renderFullSnapshot(engineFacade.submitMove(requireSession(cliCommand), requireValue(cliCommand.move(), "move")));
-            case GAME_PLAY -> handleGamePlay(engineFacade, cliCommand);
-            case GAME_UNDO -> renderFullSnapshot(engineFacade.undoLastMove(requireSession(cliCommand)));
-            case GAME_RESIGN -> renderFullSnapshot(engineFacade.resignGame(requireSession(cliCommand), cliCommand.color()));
+            case GAME_NEW -> handleGameNew(engineFacade, boardRenderer, cliCommand);
+            case GAME_SHOW -> renderFullSnapshot(engineFacade.loadGame(requireSession(cliCommand)), boardRenderer, cliCommand.boardTheme());
+            case GAME_MOVE -> renderFullSnapshot(engineFacade.submitMove(requireSession(cliCommand), requireValue(cliCommand.move(), "move")), boardRenderer, cliCommand.boardTheme());
+            case GAME_PLAY -> handleGamePlay(engineFacade, boardRenderer, cliCommand);
+            case GAME_UNDO -> renderFullSnapshot(engineFacade.undoLastMove(requireSession(cliCommand)), boardRenderer, cliCommand.boardTheme());
+            case GAME_RESIGN -> renderFullSnapshot(engineFacade.resignGame(requireSession(cliCommand), cliCommand.color()), boardRenderer, cliCommand.boardTheme());
             case GAME_PGN -> System.out.println(engineFacade.exportPgn(requireSession(cliCommand)));
         }
     }
 
-    private static void handleGameNew(EngineFacade engineFacade, CliCommand cliCommand) throws IOException {
+    private static void handleGameNew(EngineFacade engineFacade, BoardAsciiRenderer boardRenderer, CliCommand cliCommand) throws IOException {
         GameSnapshot snapshot = engineFacade.startGame(new GameStartRequest(
                 cliCommand.color(),
                 cliCommand.opponent(),
@@ -59,13 +63,13 @@ public final class JChessCliApplication {
                 cliCommand.whitePlayerName(),
                 cliCommand.blackPlayerName()
         ));
-        renderFullSnapshot(snapshot);
+        renderFullSnapshot(snapshot, boardRenderer, cliCommand.boardTheme());
         if (cliCommand.interactive()) {
-            runInteractiveLoop(engineFacade, snapshot.sessionId());
+            runInteractiveLoop(engineFacade, boardRenderer, snapshot.sessionId(), cliCommand.boardTheme());
         }
     }
 
-    private static void handleGamePlay(EngineFacade engineFacade, CliCommand cliCommand) throws IOException {
+    private static void handleGamePlay(EngineFacade engineFacade, BoardAsciiRenderer boardRenderer, CliCommand cliCommand) throws IOException {
         UUID sessionId = cliCommand.sessionId();
         if (sessionId == null && cliCommand.startGame()) {
             GameSnapshot snapshot = engineFacade.startGame(new GameStartRequest(
@@ -79,7 +83,7 @@ public final class JChessCliApplication {
         }
 
         require(sessionId != null, "`game play` requires an existing session or `--new`");
-        runInteractiveLoop(engineFacade, sessionId);
+        runInteractiveLoop(engineFacade, boardRenderer, sessionId, cliCommand.boardTheme());
     }
 
     private static EngineFacade createEngine(Path databasePath) {
@@ -88,13 +92,14 @@ public final class JChessCliApplication {
         return new ChessEngineService(repository, new ConsoleTelemetry(), new HttpMachineMoveClient());
     }
 
-    private static void runInteractiveLoop(EngineFacade engineFacade, UUID sessionId) throws IOException {
+    private static void runInteractiveLoop(EngineFacade engineFacade, BoardAsciiRenderer boardRenderer, UUID sessionId, String initialTheme) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        System.out.println("Interactive commands: help, status, board, moves, fen, undo, resign, pgn, exit");
+        String currentTheme = initialTheme;
+        System.out.println("Interactive commands: help, status, board, moves, fen, theme, themes, undo, resign, pgn, exit");
 
         while (true) {
             GameSnapshot current = engineFacade.loadGame(sessionId);
-            renderFullSnapshot(current);
+            renderFullSnapshot(current, boardRenderer, currentTheme);
             if (current.status().name().equals("FINISHED")) {
                 return;
             }
@@ -124,7 +129,7 @@ public final class JChessCliApplication {
                     continue;
                 }
                 if (normalized.equals("board")) {
-                    System.out.println(engineFacade.loadGame(sessionId).boardAscii());
+                    System.out.println(boardRenderer.render(engineFacade.loadGame(sessionId).position(), currentTheme));
                     continue;
                 }
                 if (normalized.equals("moves")) {
@@ -135,12 +140,28 @@ public final class JChessCliApplication {
                     System.out.println(engineFacade.loadGame(sessionId).position().toFen());
                     continue;
                 }
+                if (normalized.equals("themes")) {
+                    printThemes(boardRenderer, currentTheme);
+                    continue;
+                }
+                if (normalized.equals("theme")) {
+                    System.out.println("Current board theme: " + currentTheme);
+                    continue;
+                }
+                if (normalized.startsWith("theme ")) {
+                    String requestedTheme = trimmed.substring(6).trim();
+                    require(!requestedTheme.isBlank(), "missing board theme name");
+                    boardRenderer.render(current.position(), requestedTheme);
+                    currentTheme = requestedTheme;
+                    System.out.println("Board theme switched to `" + currentTheme + "`");
+                    continue;
+                }
                 if (normalized.equals("undo")) {
-                    renderFullSnapshot(engineFacade.undoLastMove(sessionId));
+                    renderFullSnapshot(engineFacade.undoLastMove(sessionId), boardRenderer, currentTheme);
                     continue;
                 }
                 if (normalized.equals("resign")) {
-                    renderFullSnapshot(engineFacade.resignGame(sessionId, null));
+                    renderFullSnapshot(engineFacade.resignGame(sessionId, null), boardRenderer, currentTheme);
                     continue;
                 }
                 if (normalized.equals("pgn")) {
@@ -149,16 +170,16 @@ public final class JChessCliApplication {
                 }
 
                 String move = normalized.startsWith("move ") ? trimmed.substring(5).trim() : trimmed;
-                renderFullSnapshot(engineFacade.submitMove(sessionId, move));
+                renderFullSnapshot(engineFacade.submitMove(sessionId, move), boardRenderer, currentTheme);
             } catch (RuntimeException ex) {
                 System.out.println("Error: " + ex.getMessage());
             }
         }
     }
 
-    private static void renderFullSnapshot(GameSnapshot snapshot) {
+    private static void renderFullSnapshot(GameSnapshot snapshot, BoardAsciiRenderer boardRenderer, String boardTheme) {
         renderCompact(snapshot);
-        System.out.println(snapshot.boardAscii());
+        System.out.println(boardRenderer.render(snapshot.position(), boardTheme));
         System.out.println("Legal moves (EN): " + String.join(", ", snapshot.legalMovesEnglish()));
         System.out.println("Legal moves (ES): " + String.join(", ", snapshot.legalMovesSpanish()));
         if (!snapshot.moves().isEmpty()) {
@@ -175,6 +196,15 @@ public final class JChessCliApplication {
         System.out.println("Turn: " + snapshot.position().sideToMove() + "  Human side: " + snapshot.humanSide());
         System.out.println("FEN: " + snapshot.position().toFen());
         System.out.println("Moves played: " + snapshot.moves().size());
+    }
+
+    private static void printThemes(BoardAsciiRenderer boardRenderer, String currentTheme) {
+        System.out.println("Available board themes:");
+        for (BoardTheme theme : boardRenderer.availableThemes()) {
+            String marker = theme.name().equalsIgnoreCase(currentTheme) ? "*" : " ";
+            System.out.printf(" %s %-14s %s%n", marker, theme.name(), theme.description());
+        }
+        System.out.println("Custom themes are loaded from ./boards and ~/.jchess/boards");
     }
 
     private static UUID requireSession(CliCommand cliCommand) {
@@ -204,6 +234,7 @@ public final class JChessCliApplication {
                   jchess game undo <session> [--db <path>]
                   jchess game resign <session> [--color <white|black>] [--db <path>]
                   jchess game pgn <session> [--db <path>]
+                  jchess themes
                   jchess server start [--port <number>] [--db <path>]
 
                 Short aliases:
@@ -214,18 +245,24 @@ public final class JChessCliApplication {
                   jchess undo <session>
                   jchess resign <session>
                   jchess pgn <session>
+                  jchess themes
                   jchess serve
 
                 Game options:
                   --color <white|black>               Preferred human color
                   --opponent <human|machine>          Opponent type
                   --llm <deepseek|groq>               LLM provider for machine mode
+                  --board-theme <name>                Board theme (default: letters)
                   --white-name <name>                 White player display name
                   --black-name <name>                 Black player display name
                   --interactive                       Enter interactive mode after creating a game
                   --new                               Create a new game inside `game play`
                   --db <path>                         SQLite database path (default: ./jchess.db)
                   --port <number>                     Server port (default: 8080)
+
+                Board themes:
+                  Use `jchess themes` to list bundled styles.
+                  Custom themes are loaded from `./boards` and `~/.jchess/boards`.
 
                 Legacy compatibility:
                   --start-game, --move, --interactive, --undo, --resign, --pgn, --server
@@ -254,6 +291,9 @@ public final class JChessCliApplication {
                   board             Show ASCII board
                   moves             Show legal moves
                   fen               Show current FEN
+                  theme             Show current board theme
+                  theme <name>      Switch board theme
+                  themes            List board themes
                   undo              Undo the last ply or exchange
                   resign            Resign the game
                   pgn               Print PGN
@@ -271,6 +311,7 @@ public final class JChessCliApplication {
 
     private enum Action {
         HELP,
+        LIST_THEMES,
         GAME_NEW,
         GAME_SHOW,
         GAME_MOVE,
@@ -292,6 +333,7 @@ public final class JChessCliApplication {
             LlmProvider llmProvider,
             Path databasePath,
             int port,
+            String boardTheme,
             String whitePlayerName,
             String blackPlayerName
     ) {
@@ -315,6 +357,7 @@ public final class JChessCliApplication {
                 case "game" -> parseGameSubcommand(tokens.subList(1, tokens.size()));
                 case "server" -> parseServerSubcommand(tokens.subList(1, tokens.size()));
                 case "new", "show", "move", "play", "undo", "resign", "pgn" -> parseGameSubcommand(tokens);
+                case "themes" -> ParsedOptions.parseOptions(tokens.subList(1, tokens.size())).toCommand(Action.LIST_THEMES, false, null, null);
                 case "serve" -> parseServerSubcommand(prepend("start", tokens.subList(1, tokens.size())));
                 case "help" -> help();
                 default -> throw new IllegalArgumentException("unsupported command: " + first);
@@ -334,6 +377,7 @@ public final class JChessCliApplication {
                 case "undo" -> parsed.toCommand(Action.GAME_UNDO, false, positionalSession(parsed, 0), null);
                 case "resign" -> parsed.toCommand(Action.GAME_RESIGN, false, positionalSession(parsed, 0), null);
                 case "pgn" -> parsed.toCommand(Action.GAME_PGN, false, positionalSession(parsed, 0), null);
+                case "themes" -> parsed.toCommand(Action.LIST_THEMES, false, null, null);
                 case "help" -> help();
                 default -> throw new IllegalArgumentException("unsupported game command: " + verb);
             };
@@ -387,6 +431,7 @@ public final class JChessCliApplication {
                     null,
                     Path.of("jchess.db"),
                     8080,
+                    "letters",
                     "white",
                     "black"
             );
@@ -462,6 +507,7 @@ public final class JChessCliApplication {
                     LlmProvider.fromCliValue(values.get("llm")),
                     Path.of(values.getOrDefault("db", "jchess.db")),
                     Integer.parseInt(values.getOrDefault("port", "8080")),
+                    values.getOrDefault("board-theme", "letters"),
                     values.getOrDefault("white-name", "white"),
                     values.getOrDefault("black-name", "black")
             );
