@@ -159,11 +159,13 @@ async function handleSubmit() {
   padding: 2rem;
   display: grid;
   gap: 1.75rem;
+  background: linear-gradient(180deg, rgba(24, 34, 45, 0.94), rgba(18, 28, 36, 0.9));
 
   &__title {
     margin: 0.5rem 0 0.35rem;
     font-size: clamp(2rem, 4vw, 3.7rem);
-    line-height: 0.96;
+    line-height: 0.95;
+    letter-spacing: -0.05em;
   }
 
   &__copy {
@@ -209,15 +211,24 @@ async function handleSubmit() {
   &__label {
     color: var(--muted);
     font-size: 0.9rem;
+    font-weight: 600;
   }
 
   &__control {
     width: 100%;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.05);
     color: var(--text);
     padding: 0.9rem 1rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(255, 138, 102, 0.55);
+      box-shadow: 0 0 0 4px rgba(255, 138, 102, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+    }
   }
 }
 
@@ -231,8 +242,8 @@ async function handleSubmit() {
 
 .choice-mode__chip--active,
 .color-direct__choice--active {
-  border-color: rgba(255, 179, 71, 0.5);
-  background: rgba(255, 179, 71, 0.12);
+  border-color: rgba(255, 138, 102, 0.45);
+  background: rgba(255, 138, 102, 0.14);
 }
 
 .guess-board {
@@ -256,7 +267,7 @@ async function handleSubmit() {
   }
 
   &__result strong {
-    color: var(--accent);
+    color: var(--primary);
   }
 }
 </style>

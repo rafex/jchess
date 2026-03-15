@@ -1,0 +1,24 @@
+{
+  "name": "JChess",
+  "short_name": "JChess",
+  "description": "Frontend web para jugar ajedrez sobre el motor JChess.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f151c",
+  "theme_color": "#ff8a66",
+  "lang": "es-MX",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
