@@ -15,6 +15,7 @@
       ChessBoard(
         :fen='fen'
         :legal-moves-uci='legalMovesUci'
+        :animated-move-uci='lastMoveUci'
         :perspective='perspective'
         :active-side='turn'
         :interactive='status === "ACTIVE"'
@@ -109,6 +110,7 @@ const moveHistory = computed(() => chess.value.history({ verbose: true }).map((m
   san: move.san,
   uci: `${move.from}${move.to}${move.promotion || ''}`,
 })))
+const lastMoveUci = computed(() => moveHistory.value.at(-1)?.uci || '')
 const pgn = computed(() => chess.value.pgn())
 const promotionChoices = computed(() => promotionOptions(turn.value))
 const promotionSubtitle = computed(() => `Movimiento ${promotionState.value.move?.from || ''} → ${promotionState.value.move?.to || ''}`)

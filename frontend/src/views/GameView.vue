@@ -15,6 +15,7 @@
       ChessBoard.game-view__board(
         :fen='game.fen'
         :legal-moves-uci='game.legalMovesUci'
+        :animated-move-uci='animatedMoveUci'
         :perspective='perspective'
         :active-side='game.turn'
         :interactive='canInteractWithBoard'
@@ -117,6 +118,7 @@ const boardShell = ref(null)
 const boardHeight = ref(0)
 const submittingMove = ref(false)
 const socketStatus = ref('idle')
+const animatedMoveUci = ref('')
 const promotionState = ref({
   open: false,
   move: null,
@@ -327,7 +329,12 @@ async function performMove(move) {
       }
     } else {
       const response = await submitMove(game.value.sessionId, playerToken, move.from, move.to, move.promotion)
-      game.value = response.data
+      if (sessionStore.state.opponent === 'machine') {
+        await stageMachineResponse(game.value, response.data)
+      } else {
+        game.value = response.data
+        animatedMoveUci.value = response.data?.moves?.at(-1)?.uci || ''
+      }
     }
 
     if (sessionStore.state.localHotseat) {
@@ -340,6 +347,37 @@ async function performMove(move) {
       submittingMove.value = false
     }
   }
+}
+
+async function stageMachineResponse(previousGame, finalGame) {
+  const previousMoveCount = previousGame?.moves?.length || 0
+  const newMoves = finalGame?.moves?.slice(previousMoveCount) || []
+  const humanMove = newMoves[0]
+  const machineMove = newMoves[1]
+
+  if (!humanMove || !machineMove) {
+    game.value = finalGame
+    animatedMoveUci.value = finalGame?.moves?.at(-1)?.uci || ''
+    return
+  }
+
+  game.value = {
+    ...finalGame,
+    fen: humanMove.fenAfter,
+    turn: machineMove.side,
+    version: Math.max((previousGame?.version || 0) + 1, (finalGame?.version || 0) - 1),
+    updatedAt: humanMove.playedAt || finalGame.updatedAt,
+    moves: finalGame.moves.slice(0, previousMoveCount + 1),
+    legalMovesEnglish: [],
+    legalMovesSpanish: [],
+    legalMovesUci: [],
+  }
+  animatedMoveUci.value = ''
+
+  await wait(sessionStore.state.machineMode === 'competitive' ? 220 : 900)
+
+  game.value = finalGame
+  animatedMoveUci.value = machineMove.uci
 }
 
 async function resign() {
@@ -439,6 +477,7 @@ function connectRealtime() {
         case 'player_disconnected':
           if (envelope.data?.sessionId) {
             game.value = envelope.data
+            animatedMoveUci.value = envelope.data?.moves?.at(-1)?.uci || ''
           }
           submittingMove.value = false
           if (envelope.type === 'player_disconnected') {
@@ -468,6 +507,12 @@ async function copyInvite(invite) {
   const access = `Sesion: ${invite.sessionId}\nToken ${invite.side}: ${invite.token}\nAbrir: ${joinUrl}`
   await navigator.clipboard.writeText(access)
   feedback.value = `Acceso ${invite.side} copiado al portapapeles`
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
 }
 </script>
 

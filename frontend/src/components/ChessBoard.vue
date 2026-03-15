@@ -4,31 +4,40 @@
     .pill {{ orientationLabel }}
     .pill(v-if='selectedSquare') Seleccionada {{ selectedSquare }}
     .pill(v-if='busy && busyLabel') {{ busyLabel }}
-  .board-overlay(v-if='busy')
-    span.board-overlay__label {{ busyLabel || 'Procesando...' }}
-  .board-grid
-    button.board-square(
-      v-for='square in orientedSquares'
-      :key='square.key'
-      type='button'
-      :class='squareClasses(square)'
-      :disabled='!interactive || busy'
-      @click='selectSquare(square)'
-    )
-      span.board-square__label {{ square.square }}
-      img.board-square__piece(
-        v-if='square.pieceAsset'
-        :class='pieceClasses(square)'
-        :src='square.pieceAsset'
-        :alt='square.pieceAlt'
-        loading='lazy'
-        decoding='async'
+  .board-stage
+    .board-status.animate__animated.animate__fadeIn(v-if='busy && busyLabel')
+      span.board-status__label {{ busyLabel || 'Procesando...' }}
+    .board-grid(ref='boardGrid')
+      button.board-square(
+        v-for='square in orientedSquares'
+        :key='square.key'
+        type='button'
+        :class='squareClasses(square)'
+        :disabled='!interactive || busy'
+        @click='selectSquare(square)'
+      )
+        span.board-square__label {{ square.square }}
+        img.board-square__piece(
+          v-if='square.pieceAsset'
+          :class='pieceClasses(square)'
+          :src='square.pieceAsset'
+          :alt='square.pieceAlt'
+          loading='lazy'
+          decoding='async'
+          draggable='false'
+        )
+    transition(name='board-ghost')
+      img.board-ghost.animate__animated.animate__fadeIn(
+        v-if='movingPiece'
+        :src='movingPiece.asset'
+        :alt='movingPiece.alt'
+        :style='movingPieceStyle'
         draggable='false'
       )
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { legalMovesForSquare, orientSquares, parseFenBoard, squareColor } from '../lib/chess'
 
 const props = defineProps({
@@ -60,11 +69,18 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  animatedMoveUci: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['move-intent'])
 
 const selectedSquare = ref('')
+const boardGrid = ref(null)
+const movingPiece = ref(null)
+const movingPieceStyle = ref({})
 
 const squares = computed(() => parseFenBoard(props.fen))
 const orientedSquares = computed(() => orientSquares(squares.value, props.perspective))
@@ -74,6 +90,51 @@ const orientationLabel = computed(() => `Vista ${props.perspective === 'WHITE' ?
 
 watch(() => props.fen, () => {
   selectedSquare.value = ''
+})
+
+watch(() => props.animatedMoveUci, async (nextMove, previousMove) => {
+  if (!nextMove || nextMove === previousMove) {
+    return
+  }
+
+  const from = nextMove.slice(0, 2)
+  const to = nextMove.slice(2, 4)
+  const targetSquare = squares.value.find((square) => square.square === to)
+  if (!targetSquare?.pieceAsset || !boardGrid.value) {
+    return
+  }
+
+  const geometry = squareGeometry(from, to)
+  if (!geometry) {
+    return
+  }
+
+  movingPiece.value = {
+    asset: targetSquare.pieceAsset,
+    alt: targetSquare.pieceAlt,
+  }
+  movingPieceStyle.value = {
+    width: `${geometry.size}px`,
+    height: `${geometry.size}px`,
+    left: `${geometry.fromLeft}px`,
+    top: `${geometry.fromTop}px`,
+    transform: 'translate3d(0, 0, 0) scale(1)',
+  }
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    movingPieceStyle.value = {
+      ...movingPieceStyle.value,
+      left: `${geometry.toLeft}px`,
+      top: `${geometry.toTop}px`,
+      transform: 'translate3d(0, 0, 0) scale(1)',
+    }
+  })
+
+  window.setTimeout(() => {
+    movingPiece.value = null
+    movingPieceStyle.value = {}
+  }, 380)
 })
 
 function selectSquare(square) {
@@ -133,6 +194,36 @@ function pieceClasses(square) {
     'board-square__piece--white': square.side === 'WHITE',
     'board-square__piece--black': square.side === 'BLACK',
     'board-square__piece--empty': !square.side,
+    'board-square__piece--hidden': movingPiece.value && props.animatedMoveUci?.slice(2, 4) === square.square,
+  }
+}
+
+function squareGeometry(fromSquare, toSquare) {
+  const board = boardGrid.value
+  if (!board) {
+    return null
+  }
+
+  const size = board.clientWidth / 8
+  const fromIndex = orientedSquares.value.findIndex((square) => square.square === fromSquare)
+  const toIndex = orientedSquares.value.findIndex((square) => square.square === toSquare)
+  if (fromIndex < 0 || toIndex < 0) {
+    return null
+  }
+
+  const fromRow = Math.floor(fromIndex / 8)
+  const fromCol = fromIndex % 8
+  const toRow = Math.floor(toIndex / 8)
+  const toCol = toIndex % 8
+  const pieceSize = size * 0.74
+  const offset = (size - pieceSize) / 2
+
+  return {
+    size: pieceSize,
+    fromLeft: fromCol * size + offset,
+    fromTop: fromRow * size + offset + 1,
+    toLeft: toCol * size + offset,
+    toTop: toRow * size + offset + 1,
   }
 }
 </script>
@@ -151,6 +242,10 @@ function pieceClasses(square) {
   flex-wrap: wrap;
 }
 
+.board-stage {
+  position: relative;
+}
+
 .board-grid {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -159,24 +254,25 @@ function pieceClasses(square) {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.board-overlay {
+.board-status {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border-radius: inherit;
-  background: rgba(8, 12, 16, 0.34);
-  backdrop-filter: blur(4px);
-  z-index: 3;
+  top: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
   pointer-events: none;
 
   &__label {
-    padding: 0.8rem 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.85rem;
     border-radius: 999px;
-    background: rgba(17, 24, 31, 0.86);
-    border: 1px solid var(--line);
+    background: rgba(17, 24, 31, 0.84);
+    border: 1px solid rgba(255, 138, 102, 0.28);
     color: var(--text);
     font-weight: 700;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
   }
 }
 
@@ -243,6 +339,32 @@ function pieceClasses(square) {
     &--empty {
       opacity: 0;
     }
+
+    &--hidden {
+      opacity: 0;
+    }
   }
+}
+
+.board-ghost {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  object-fit: contain;
+  transition:
+    left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  filter: drop-shadow(0 12px 20px rgba(7, 11, 15, 0.22));
+}
+
+.board-ghost-enter-active,
+.board-ghost-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.board-ghost-enter-from,
+.board-ghost-leave-to {
+  opacity: 0;
 }
 </style>
