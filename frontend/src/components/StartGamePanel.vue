@@ -16,7 +16,20 @@
           option(value='machine') Máquina
           option(value='human') Humano local
           option(value='human-remote') Humano remoto
-      label.field(v-if='form.opponent !== "machine"')
+      label.field(v-if='form.opponent === "machine"')
+        span.field__label Modo de máquina
+        select.field__control(v-model='form.machineMode')
+          option(value='casual') Casual
+          option(value='competitive') Competitivo
+      label.field(v-if='form.opponent === "machine"')
+        span.field__label Nivel
+        select.field__control(v-model='form.machineLevel')
+          option(value='easy') Fácil
+          option(value='medium') Medio
+          option(value='hard') Difícil
+          option(value='advanced') Avanzado
+          option(value='master') Maestro
+      label.field(v-if='form.opponent !== "machine" || form.machineMode === "competitive"')
         span.field__label Reloj
         select.field__control(v-model='form.timeControl')
           option(value='3+0') 3 min
@@ -24,11 +37,16 @@
           option(value='10+0') 10 min
           option(value='10+5') 10 min + 5s
           option(value='15+10') 15 min + 10s
-      .start-panel__hint-card(v-else)
+      .start-panel__hint-card(v-else-if='form.opponent === "machine"')
         strong Sin reloj por defecto
         p
           | Contra la máquina usamos modo casual para que no haya desventaja por respuestas
           |  casi instantáneas. Más adelante podemos añadir un modo competitivo separado.
+      .start-panel__hint-card(v-if='form.opponent === "machine" && form.machineMode === "competitive"')
+        strong Modo competitivo
+        p
+          | La máquina usa reloj autoritativo del backend y un tiempo objetivo de pensamiento
+          |  según el nivel elegido.
       label.field(v-if='form.opponent === "machine"')
         span.field__label Motor remoto
         select.field__control(v-model='form.llm')
@@ -125,6 +143,8 @@ const revealed = ref(false)
 const form = reactive({
   opponent: 'machine',
   llm: '',
+  machineMode: 'casual',
+  machineLevel: 'medium',
   whitePlayerName: 'Player',
   blackPlayerName: 'Bot',
   colorMode: 'direct',
@@ -182,8 +202,10 @@ async function handleSubmit() {
     await emit('start', {
       opponent: form.opponent === 'human-remote' ? 'human' : form.opponent,
       llm: form.llm || null,
+      machineMode: form.machineMode,
+      machineLevel: form.machineLevel,
       color: resolvedColor.value,
-      timeControl: form.opponent === 'machine' ? 'untimed' : form.timeControl,
+      timeControl: form.opponent === 'machine' && form.machineMode === 'casual' ? 'untimed' : form.timeControl,
       whitePlayerName: form.whitePlayerName || 'White',
       blackPlayerName: form.blackPlayerName || (form.opponent === 'machine' ? 'Machine' : 'Black'),
       localHotseat: form.opponent === 'human',

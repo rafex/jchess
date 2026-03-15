@@ -5,6 +5,8 @@ import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameEndReason;
 import dev.rafex.jchess.domain.model.GameResult;
 import dev.rafex.jchess.domain.model.GameStatus;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Position;
 import dev.rafex.jchess.domain.model.RecordedMove;
@@ -35,6 +37,8 @@ final class SqliteGameRepositoryTest {
                         ParticipantType.MACHINE,
                         Side.WHITE,
                         null,
+                        MachineGameMode.CASUAL,
+                        MachineLevel.MEDIUM,
                         "5+0",
                         Position.initial(),
                         GameStatus.ACTIVE,

@@ -74,6 +74,8 @@ async function startGame(payload) {
         BLACK: payload.blackPlayerName || 'Black',
       },
       timeControl: payload.timeControl,
+      machineMode: payload.machineMode,
+      machineLevel: payload.machineLevel,
     })
     await router.push({ name: 'offline-game' })
     return
@@ -114,6 +116,8 @@ async function startGame(payload) {
     tokens,
     inviteTokens,
     timeControl: payload.timeControl,
+    machineMode: payload.machineMode,
+    machineLevel: payload.machineLevel,
     playerNames: {
       WHITE: game.players.find((player) => player.side === 'WHITE')?.displayName || payload.whitePlayerName,
       BLACK: game.players.find((player) => player.side === 'BLACK')?.displayName || payload.blackPlayerName,
@@ -143,6 +147,8 @@ async function joinRemoteGame(payload) {
       BLACK: null,
     },
     timeControl: sessionStore.state.timeControl,
+    machineMode: sessionStore.state.machineMode,
+    machineLevel: sessionStore.state.machineLevel,
     playerNames: {
       WHITE: game.players.find((player) => player.side === 'WHITE')?.displayName || 'White',
       BLACK: game.players.find((player) => player.side === 'BLACK')?.displayName || 'Black',
@@ -191,6 +197,8 @@ async function resumeGame(sessionId) {
     inviteTokens: { WHITE: null, BLACK: null },
     playerNames: sessionStore.state.playerNames,
     timeControl: sessionStore.state.timeControl,
+    machineMode: sessionStore.state.machineMode,
+    machineLevel: sessionStore.state.machineLevel,
   })
   await router.push({ name: 'game', params: { sessionId } })
 }

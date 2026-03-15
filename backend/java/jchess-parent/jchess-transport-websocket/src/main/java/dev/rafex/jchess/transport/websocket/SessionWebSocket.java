@@ -7,6 +7,8 @@ import dev.rafex.jchess.domain.model.GameSessionAccess;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.LlmProvider;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Side;
@@ -85,6 +87,8 @@ public final class SessionWebSocket {
                 parseSide(payload.get("color")),
                 parseOpponent(payload.get("opponent")),
                 LlmProvider.fromCliValue(string(payload.get("llm"))),
+                MachineGameMode.fromValue(string(payload.get("machineMode"))),
+                MachineLevel.fromValue(string(payload.get("machineLevel"))),
                 stringOrDefault(payload.get("timeControl"), "5+0"),
                 stringOrDefault(payload.get("whitePlayerName"), "white"),
                 stringOrDefault(payload.get("blackPlayerName"), "black")

@@ -8,6 +8,8 @@ import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameStatus;
 import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.LlmProvider;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.RecordedMove;
 import dev.rafex.jchess.domain.model.Side;
@@ -142,6 +144,8 @@ public final class SqliteGameRepository implements GameRepository {
                         black_participant text not null,
                         preferred_human_side text,
                         llm_provider text,
+                        machine_mode text not null default 'CASUAL',
+                        machine_level text not null default 'MEDIUM',
                         time_control text not null default '5+0',
                         current_fen text not null,
                         status text not null,
@@ -178,6 +182,8 @@ public final class SqliteGameRepository implements GameRepository {
             statement.executeUpdate("create index if not exists idx_game_move_session on game_move(session_id)");
             ensureColumn(statement, "game_session", "result", "text not null default 'IN_PROGRESS'");
             ensureColumn(statement, "game_session", "end_reason", "text not null default 'NONE'");
+            ensureColumn(statement, "game_session", "machine_mode", "text not null default 'CASUAL'");
+            ensureColumn(statement, "game_session", "machine_level", "text not null default 'MEDIUM'");
             ensureColumn(statement, "game_session", "time_control", "text not null default '5+0'");
             ensureColumn(statement, "game_session", "white_player_id", "text not null default ''");
             ensureColumn(statement, "game_session", "black_player_id", "text not null default ''");
@@ -215,6 +221,8 @@ public final class SqliteGameRepository implements GameRepository {
                     black_participant,
                     preferred_human_side,
                     llm_provider,
+                    machine_mode,
+                    machine_level,
                     time_control,
                     current_fen,
                     status,
@@ -232,12 +240,14 @@ public final class SqliteGameRepository implements GameRepository {
                     version,
                     created_at,
                     updated_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(session_id) do update set
                     white_participant = excluded.white_participant,
                     black_participant = excluded.black_participant,
                     preferred_human_side = excluded.preferred_human_side,
                     llm_provider = excluded.llm_provider,
+                    machine_mode = excluded.machine_mode,
+                    machine_level = excluded.machine_level,
                     time_control = excluded.time_control,
                     current_fen = excluded.current_fen,
                     status = excluded.status,
@@ -264,25 +274,27 @@ public final class SqliteGameRepository implements GameRepository {
             statement.setString(3, session.blackParticipant().name());
             statement.setString(4, session.preferredHumanSide() == null ? null : session.preferredHumanSide().name());
             statement.setString(5, session.llmProvider() == null ? null : session.llmProvider().name());
-            statement.setString(6, session.timeControl());
-            statement.setString(7, FenCodec.toFen(session.currentPosition()));
-            statement.setString(8, session.status().name());
-            statement.setString(9, session.result().name());
-            statement.setString(10, session.endReason().name());
-            statement.setString(11, session.whitePlayerId().toString());
-            statement.setString(12, session.blackPlayerId().toString());
-            statement.setString(13, session.whitePlayerName());
-            statement.setString(14, session.blackPlayerName());
-            statement.setString(15, session.whitePlayerToken());
-            statement.setString(16, session.blackPlayerToken());
-            statement.setLong(17, session.whiteClockMs());
-            statement.setLong(18, session.blackClockMs());
-            statement.setString(19, session.clockStartedAt().toString());
-            statement.setLong(20, session.version());
-            statement.setString(21, session.createdAt().toString());
-            statement.setString(22, session.updatedAt().toString());
+            statement.setString(6, session.machineMode().name());
+            statement.setString(7, session.machineLevel().name());
+            statement.setString(8, session.timeControl());
+            statement.setString(9, FenCodec.toFen(session.currentPosition()));
+            statement.setString(10, session.status().name());
+            statement.setString(11, session.result().name());
+            statement.setString(12, session.endReason().name());
+            statement.setString(13, session.whitePlayerId().toString());
+            statement.setString(14, session.blackPlayerId().toString());
+            statement.setString(15, session.whitePlayerName());
+            statement.setString(16, session.blackPlayerName());
+            statement.setString(17, session.whitePlayerToken());
+            statement.setString(18, session.blackPlayerToken());
+            statement.setLong(19, session.whiteClockMs());
+            statement.setLong(20, session.blackClockMs());
+            statement.setString(21, session.clockStartedAt().toString());
+            statement.setLong(22, session.version());
+            statement.setString(23, session.createdAt().toString());
+            statement.setString(24, session.updatedAt().toString());
             if (checkVersion) {
-                statement.setLong(23, expectedVersion);
+                statement.setLong(25, expectedVersion);
             }
             return statement.executeUpdate() > 0;
         }
@@ -331,6 +343,8 @@ public final class SqliteGameRepository implements GameRepository {
                     black_participant,
                     preferred_human_side,
                     llm_provider,
+                    machine_mode,
+                    machine_level,
                     time_control,
                     current_fen,
                     status,
@@ -363,6 +377,8 @@ public final class SqliteGameRepository implements GameRepository {
                         ParticipantType.valueOf(resultSet.getString("black_participant")),
                         sideOrNull(resultSet.getString("preferred_human_side")),
                         llmProviderOrNull(resultSet.getString("llm_provider")),
+                        MachineGameMode.fromValue(resultSet.getString("machine_mode")),
+                        MachineLevel.fromValue(resultSet.getString("machine_level")),
                         resultSet.getString("time_control"),
                         FenCodec.parse(resultSet.getString("current_fen")),
                         GameStatus.valueOf(resultSet.getString("status")),

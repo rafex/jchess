@@ -12,6 +12,8 @@ public record GameSnapshot(
         GameEndReason endReason,
         Position position,
         Side humanSide,
+        String machineMode,
+        String machineLevel,
         String timeControl,
         long whiteClockMs,
         long blackClockMs,
@@ -37,6 +39,8 @@ public record GameSnapshot(
         result = Objects.requireNonNull(result, "result must not be null");
         endReason = Objects.requireNonNull(endReason, "endReason must not be null");
         position = Objects.requireNonNull(position, "position must not be null");
+        machineMode = machineMode == null || machineMode.isBlank() ? "CASUAL" : machineMode;
+        machineLevel = machineLevel == null || machineLevel.isBlank() ? "MEDIUM" : machineLevel;
         timeControl = timeControl == null || timeControl.isBlank() ? "5+0" : timeControl;
         whiteParticipant = Objects.requireNonNull(whiteParticipant, "whiteParticipant must not be null");
         blackParticipant = Objects.requireNonNull(blackParticipant, "blackParticipant must not be null");

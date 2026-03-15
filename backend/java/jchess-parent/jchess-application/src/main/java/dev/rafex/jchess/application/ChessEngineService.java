@@ -23,6 +23,8 @@ import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameStatus;
 import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.LlmProvider;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.Move;
 import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.NotationLanguage;
@@ -150,6 +152,8 @@ public final class ChessEngineService implements EngineFacade {
                 blackParticipant,
                 humanSide,
                 request.llmProvider(),
+                request.machineMode(),
+                request.machineLevel(),
                 request.timeControl(),
                 Position.initial(),
                 GameStatus.ACTIVE,
@@ -324,18 +328,39 @@ public final class ChessEngineService implements EngineFacade {
         LlmProvider provider = gameState.session().llmProvider();
         Position position = gameState.session().currentPosition();
         List<String> englishNotations = moveNotationService.toNotations(position, legalMoves, NotationLanguage.ENGLISH);
+        long startedAt = System.currentTimeMillis();
 
         if (provider != null) {
             Optional<String> suggestion = machineMovePort.suggestMove(gameState, englishNotations, provider);
             if (suggestion.isPresent()) {
                 try {
-                    return moveNotationService.parse(position, suggestion.get(), legalMoves);
+                    return delayMachineMoveIfNeeded(gameState, moveNotationService.parse(position, suggestion.get(), legalMoves), startedAt);
                 } catch (RuntimeException ignored) {
                 }
             }
         }
 
-        return chooseMove(position);
+        MachineLevel level = gameState.session().machineLevel();
+        Move move = searchEngine.chooseMove(position, new EngineOptions(level.depth(), level.searchBudget()));
+        return delayMachineMoveIfNeeded(gameState, move, startedAt);
+    }
+
+    private Move delayMachineMoveIfNeeded(GameState gameState, Move move, long startedAt) {
+        if (gameState.session().machineMode() != MachineGameMode.COMPETITIVE) {
+            return move;
+        }
+
+        long targetMs = gameState.session().machineLevel().targetThinkTime().toMillis();
+        long elapsed = Math.max(0L, System.currentTimeMillis() - startedAt);
+        long delay = Math.max(0L, targetMs - elapsed);
+        if (delay > 0) {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return move;
     }
 
     private Move resolveStructuredMove(MoveRequest moveRequest, List<Move> legalMoves) {
@@ -494,6 +519,8 @@ public final class ChessEngineService implements EngineFacade {
                 gameState.session().endReason(),
                 position,
                 gameState.session().preferredHumanSide(),
+                gameState.session().machineMode().name(),
+                gameState.session().machineLevel().name(),
                 gameState.session().timeControl(),
                 gameState.session().remainingClockMs(Side.WHITE, Instant.now()),
                 gameState.session().remainingClockMs(Side.BLACK, Instant.now()),

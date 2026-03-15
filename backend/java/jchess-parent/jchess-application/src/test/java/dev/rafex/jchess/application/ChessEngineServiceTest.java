@@ -5,6 +5,8 @@ import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.LlmProvider;
 import dev.rafex.jchess.domain.model.MoveRequest;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Side;
 import dev.rafex.jchess.ports.outbound.EngineTelemetry;
@@ -29,7 +31,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var snapshot = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
+        var snapshot = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Alice", "Bob"));
 
         assertEquals(Side.WHITE, snapshot.humanSide());
         assertEquals(20, snapshot.legalMovesEnglish().size());
@@ -42,12 +44,12 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
+        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Alice", "Bob"));
         var afterEnglish = service.submitMove(started.sessionId(), "Nf3");
 
         assertEquals("Nf3", afterEnglish.moves().getFirst().canonicalNotation());
 
-        var startedSpanish = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
+        var startedSpanish = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Alice", "Bob"));
         var afterSpanish = service.submitMove(startedSpanish.sessionId(), "Cf3)");
 
         assertEquals("Nf3", afterSpanish.moves().getFirst().canonicalNotation());
@@ -58,7 +60,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new FixedMachineMovePort("e5"));
 
-        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.MACHINE, LlmProvider.GROQ, "5+0", "Alice", "Bot"));
+        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.MACHINE, LlmProvider.GROQ, MachineGameMode.COMPETITIVE, MachineLevel.MEDIUM, "5+0", "Alice", "Bot"));
         var afterMove = service.submitMove(started.sessionId(), "e4");
 
         assertEquals(2, afterMove.moves().size());
@@ -71,7 +73,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var started = service.startGameAccess(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
+        var started = service.startGameAccess(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Alice", "Bob"));
         var afterMove = service.submitMove(started.snapshot().sessionId(), MoveRequest.of(started.requester().playerToken(), "e2", "e4", null));
 
         assertEquals("e2e4", afterMove.moves().getFirst().uci());
@@ -83,7 +85,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
+        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Alice", "Bob"));
         var played = service.submitMove(started.sessionId(), "e4");
         var undone = service.undoLastMove(started.sessionId());
 
@@ -97,8 +99,8 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
-        service.startGame(new GameStartRequest(Side.BLACK, ParticipantType.HUMAN, null, "5+0", "Carol", "Dave"));
+        service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Alice", "Bob"));
+        service.startGame(new GameStartRequest(Side.BLACK, ParticipantType.HUMAN, null, MachineGameMode.CASUAL, MachineLevel.MEDIUM, "5+0", "Carol", "Dave"));
 
         List<GameSummary> games = service.listGames(10);
 

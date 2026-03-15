@@ -9,6 +9,8 @@ import dev.rafex.jchess.core.engine.BoardTheme;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.LlmProvider;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Side;
 import dev.rafex.jchess.ports.outbound.EngineTelemetry;
@@ -60,6 +62,8 @@ public final class JChessCliApplication {
                 cliCommand.color(),
                 cliCommand.opponent(),
                 cliCommand.llmProvider(),
+                MachineGameMode.CASUAL,
+                MachineLevel.MEDIUM,
                 "5+0",
                 cliCommand.whitePlayerName(),
                 cliCommand.blackPlayerName()
@@ -77,6 +81,8 @@ public final class JChessCliApplication {
                     cliCommand.color(),
                     cliCommand.opponent(),
                     cliCommand.llmProvider(),
+                    MachineGameMode.CASUAL,
+                    MachineLevel.MEDIUM,
                     "5+0",
                     cliCommand.whitePlayerName(),
                     cliCommand.blackPlayerName()

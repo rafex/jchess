@@ -11,6 +11,8 @@ public record GameSession(
         ParticipantType blackParticipant,
         Side preferredHumanSide,
         LlmProvider llmProvider,
+        MachineGameMode machineMode,
+        MachineLevel machineLevel,
         String timeControl,
         Position currentPosition,
         GameStatus status,
@@ -33,6 +35,8 @@ public record GameSession(
         sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
         whiteParticipant = Objects.requireNonNull(whiteParticipant, "whiteParticipant must not be null");
         blackParticipant = Objects.requireNonNull(blackParticipant, "blackParticipant must not be null");
+        machineMode = machineMode == null ? MachineGameMode.CASUAL : machineMode;
+        machineLevel = machineLevel == null ? MachineLevel.MEDIUM : machineLevel;
         currentPosition = Objects.requireNonNull(currentPosition, "currentPosition must not be null");
         status = Objects.requireNonNull(status, "status must not be null");
         result = Objects.requireNonNull(result, "result must not be null");
@@ -126,6 +130,8 @@ public record GameSession(
                 blackParticipant,
                 preferredHumanSide,
                 llmProvider,
+                machineMode,
+                machineLevel,
                 timeControl,
                 position,
                 nextStatus,

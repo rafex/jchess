@@ -15,6 +15,8 @@ const state = reactive({
     BLACK: null,
   },
   timeControl: '5+0',
+  machineMode: 'casual',
+  machineLevel: 'medium',
   perspective: 'WHITE',
   localHotseat: false,
   playerNames: {
@@ -53,6 +55,8 @@ export function useSessionStore() {
       state.tokens = { WHITE: null, BLACK: null, ...(payload.tokens || {}) }
       state.inviteTokens = { WHITE: null, BLACK: null, ...(payload.inviteTokens || {}) }
       state.timeControl = payload.timeControl || state.timeControl
+      state.machineMode = payload.machineMode || state.machineMode
+      state.machineLevel = payload.machineLevel || state.machineLevel
       state.perspective = payload.perspective
       state.localHotseat = payload.localHotseat
       state.playerNames = { WHITE: 'White', BLACK: 'Black', ...(payload.playerNames || {}) }
@@ -69,6 +73,8 @@ export function useSessionStore() {
       state.tokens = { WHITE: null, BLACK: null }
       state.inviteTokens = { WHITE: null, BLACK: null }
       state.timeControl = '5+0'
+      state.machineMode = 'casual'
+      state.machineLevel = 'medium'
       state.perspective = 'WHITE'
       state.localHotseat = false
       state.playerNames = { WHITE: 'White', BLACK: 'Black' }

@@ -10,6 +10,8 @@ import dev.rafex.jchess.domain.model.GameSessionAccess;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.LlmProvider;
+import dev.rafex.jchess.domain.model.MachineGameMode;
+import dev.rafex.jchess.domain.model.MachineLevel;
 import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Side;
@@ -95,6 +97,8 @@ public final class GamesHandler extends NonBlockingResourceHandler {
                         parseSide(body.path("color").asText(null)),
                         parseOpponent(body.path("opponent").asText(null)),
                         LlmProvider.fromCliValue(textOrNull(body, "llm")),
+                        MachineGameMode.fromValue(textOrNull(body, "machineMode")),
+                        MachineLevel.fromValue(textOrNull(body, "machineLevel")),
                         textOrDefault(body, "timeControl", "5+0"),
                         textOrDefault(body, "whitePlayerName", "white"),
                         textOrDefault(body, "blackPlayerName", "black")
