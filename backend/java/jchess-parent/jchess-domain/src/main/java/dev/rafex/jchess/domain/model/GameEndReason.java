@@ -7,5 +7,6 @@ public enum GameEndReason {
     THREEFOLD_REPETITION,
     RESIGNATION,
     DRAW_AGREEMENT,
+    TIME_FORFEIT,
     NONE
 }

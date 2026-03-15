@@ -12,6 +12,7 @@ export function createGameSocket({ sessionId, playerToken, onEnvelope, onStatusC
   let heartbeat = null
   let reconnectTimer = null
   let closedManually = false
+  let reconnectAttempts = 0
 
   function connect() {
     if (!sessionId || !playerToken) {
@@ -23,6 +24,7 @@ export function createGameSocket({ sessionId, playerToken, onEnvelope, onStatusC
     socket = new WebSocket(resolveWebSocketUrl())
 
     socket.addEventListener('open', () => {
+      reconnectAttempts = 0
       onStatusChange?.('connected')
     })
 
@@ -54,9 +56,11 @@ export function createGameSocket({ sessionId, playerToken, onEnvelope, onStatusC
       onStatusChange?.('disconnected')
       clearHeartbeat()
       if (!closedManually) {
+        reconnectAttempts += 1
+        const delay = Math.min(1000 * (2 ** Math.min(reconnectAttempts, 4)), 8000)
         reconnectTimer = window.setTimeout(() => {
           connect()
-        }, 2000)
+        }, delay)
       }
     })
 

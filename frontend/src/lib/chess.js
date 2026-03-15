@@ -63,7 +63,7 @@ export function orientSquares(squares, perspective) {
 }
 
 export function squareColor(square) {
-  return (square.fileIndex + (7 - square.rankIndex)) % 2 === 0 ? 'light' : 'dark'
+  return (square.fileIndex + square.rankIndex) % 2 === 0 ? 'light' : 'dark'
 }
 
 export function pieceSide(pieceCode) {

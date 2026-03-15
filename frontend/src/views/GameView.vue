@@ -30,6 +30,12 @@
         @cancel='cancelPromotion'
       )
     aside.game-view__sidebar(:style='sidebarStyle')
+      ClockPanel(
+        :white-label='clock.whiteLabel.value'
+        :black-label='clock.blackLabel.value'
+        :active-side='game.turn'
+        :time-control='sessionStore.state.timeControl'
+      )
       .glass-card.panel
         h2.panel__title Estado
         ul.panel__list
@@ -58,7 +64,7 @@
             small.panel__hint(v-else-if='player.connected') conectado
       .glass-card.panel(v-if='showRemoteInvite')
         h2.panel__title Invitación remota
-        p.panel__message Comparte estos accesos con cada jugador. El token da control de ese color.
+        p.panel__muted Comparte estos accesos con cada jugador. El token da control de ese color.
         .panel__invite(v-for='invite in remoteInvites' :key='invite.side')
           strong {{ invite.side }}
           code.panel__code {{ invite.sessionId }}
@@ -75,6 +81,11 @@
       .glass-card.panel(v-if='feedback')
         h2.panel__title Aviso
         p.panel__message {{ feedback }}
+      ImportExportPanel(
+        :fen='game.fen'
+        :pgn='game.pgn'
+        hint='Puedes copiar la posición actual o la partida completa para análisis y respaldo.'
+      )
 .page-shell.game-view(v-else)
   .glass-card.panel
     CubesLoader(label='Cargando partida...')
@@ -84,12 +95,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChessBoard from '../components/ChessBoard.vue'
+import ClockPanel from '../components/ClockPanel.vue'
 import CubesLoader from '../components/CubesLoader.vue'
+import ImportExportPanel from '../components/ImportExportPanel.vue'
 import PromotionDialog from '../components/PromotionDialog.vue'
 import { loadGame, resignGame, submitMove } from '../lib/api'
 import { promotionOptions } from '../lib/chess'
 import { createGameSocket } from '../lib/realtime'
 import { useSessionStore } from '../lib/sessionStore'
+import { useChessClock } from '../lib/timeControl'
 
 const route = useRoute()
 const router = useRouter()
@@ -131,6 +145,9 @@ const subtitle = computed(() => {
   if (promotionState.value.open) {
     return 'Selecciona la pieza para promocionar el peón.'
   }
+  if (!sessionStore.state.localHotseat && !sessionStore.state.tokens[currentControlSide.value]) {
+    return 'Vista de solo lectura desde el lobby. Usa un enlace de invitación para jugar en vivo.'
+  }
   if (isRemoteHuman.value && game.value.turn !== currentControlSide.value) {
     return 'Esperando el movimiento del rival en tiempo real.'
   }
@@ -143,14 +160,14 @@ const isRemoteHuman = computed(() => sessionStore.state.opponent === 'human' && 
 
 const currentControlSide = computed(() => {
   if (!game.value) {
-    return 'WHITE'
+    return null
   }
 
   if (sessionStore.state.localHotseat) {
     return game.value.turn
   }
 
-  return sessionStore.state.requesterSide || 'WHITE'
+  return sessionStore.state.requesterSide || null
 })
 
 const canInteractWithBoard = computed(() => {
@@ -159,6 +176,10 @@ const canInteractWithBoard = computed(() => {
   }
 
   if (promotionState.value.open || submittingMove.value) {
+    return false
+  }
+
+  if (!sessionStore.state.localHotseat && !sessionStore.state.tokens[currentControlSide.value]) {
     return false
   }
 
@@ -196,7 +217,7 @@ const connectionLabel = computed(() => {
     case 'error':
       return 'Error de enlace'
     case 'disconnected':
-      return 'Desconectado'
+      return 'Reconectando...'
     default:
       return 'Inactivo'
   }
@@ -210,6 +231,25 @@ const remoteInvites = computed(() => ['WHITE', 'BLACK']
     sessionId: game.value?.sessionId || sessionStore.state.sessionId,
     token: sessionStore.state.inviteTokens[side],
   })))
+const effectiveClockSide = computed(() => {
+  if (!game.value) {
+    return 'WHITE'
+  }
+
+  if (submittingMove.value && game.value.status === 'ACTIVE') {
+    return game.value.turn === 'WHITE' ? 'BLACK' : 'WHITE'
+  }
+
+  return game.value.turn
+})
+const clock = useChessClock({
+  activeSide: effectiveClockSide,
+  version: computed(() => game.value?.version || 0),
+  status: computed(() => game.value?.status || 'ACTIVE'),
+  timeControl: computed(() => game.value?.timeControl || sessionStore.state.timeControl || '5+0'),
+  whiteMs: computed(() => game.value?.whiteClockMs ?? null),
+  blackMs: computed(() => game.value?.blackClockMs ?? null),
+})
 
 const sidebarStyle = computed(() => {
   if (!boardHeight.value) {
@@ -387,6 +427,8 @@ function connectRealtime() {
           if (envelope.data?.game) {
             game.value = envelope.data.game
           }
+          feedback.value = 'El rival se conectó a la mesa.'
+          submittingMove.value = false
           break
         case 'game_state':
         case 'move_submitted':
@@ -397,6 +439,9 @@ function connectRealtime() {
             game.value = envelope.data
           }
           submittingMove.value = false
+          if (envelope.type === 'player_disconnected') {
+            feedback.value = 'El rival se desconectó. La app intentará reconectar automáticamente.'
+          }
           if (sessionStore.state.localHotseat && game.value?.turn) {
             perspective.value = game.value.turn
           }
@@ -417,7 +462,8 @@ function connectRealtime() {
 }
 
 async function copyInvite(invite) {
-  const access = `Sesion: ${invite.sessionId}\nToken ${invite.side}: ${invite.token}`
+  const joinUrl = `${window.location.origin}/?sessionId=${encodeURIComponent(invite.sessionId)}&playerToken=${encodeURIComponent(invite.token)}`
+  const access = `Sesion: ${invite.sessionId}\nToken ${invite.side}: ${invite.token}\nAbrir: ${joinUrl}`
   await navigator.clipboard.writeText(access)
   feedback.value = `Acceso ${invite.side} copiado al portapapeles`
 }
@@ -512,6 +558,11 @@ async function copyInvite(invite) {
   &__message {
     margin: 0;
     color: var(--danger);
+  }
+
+  &__muted {
+    margin: 0;
+    color: var(--muted);
   }
 
   &__invite {

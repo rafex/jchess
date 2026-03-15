@@ -35,6 +35,7 @@ final class SqliteGameRepositoryTest {
                         ParticipantType.MACHINE,
                         Side.WHITE,
                         null,
+                        "5+0",
                         Position.initial(),
                         GameStatus.ACTIVE,
                         GameResult.IN_PROGRESS,
@@ -45,6 +46,9 @@ final class SqliteGameRepositoryTest {
                         "Bot",
                         "white-token",
                         "black-token",
+                        300_000,
+                        300_000,
+                        Instant.now(),
                         0,
                         Instant.now(),
                         Instant.now()

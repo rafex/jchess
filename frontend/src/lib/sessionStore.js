@@ -14,6 +14,7 @@ const state = reactive({
     WHITE: null,
     BLACK: null,
   },
+  timeControl: '5+0',
   perspective: 'WHITE',
   localHotseat: false,
   playerNames: {
@@ -49,11 +50,12 @@ export function useSessionStore() {
       state.sessionId = payload.sessionId
       state.opponent = payload.opponent
       state.requesterSide = payload.requesterSide
-      state.tokens = { ...state.tokens, ...payload.tokens }
-      state.inviteTokens = { ...state.inviteTokens, ...(payload.inviteTokens || {}) }
+      state.tokens = { WHITE: null, BLACK: null, ...(payload.tokens || {}) }
+      state.inviteTokens = { WHITE: null, BLACK: null, ...(payload.inviteTokens || {}) }
+      state.timeControl = payload.timeControl || state.timeControl
       state.perspective = payload.perspective
       state.localHotseat = payload.localHotseat
-      state.playerNames = { ...state.playerNames, ...payload.playerNames }
+      state.playerNames = { WHITE: 'White', BLACK: 'Black', ...(payload.playerNames || {}) }
       persist()
     },
     setPerspective(side) {
@@ -66,6 +68,7 @@ export function useSessionStore() {
       state.requesterSide = null
       state.tokens = { WHITE: null, BLACK: null }
       state.inviteTokens = { WHITE: null, BLACK: null }
+      state.timeControl = '5+0'
       state.perspective = 'WHITE'
       state.localHotseat = false
       state.playerNames = { WHITE: 'White', BLACK: 'Black' }

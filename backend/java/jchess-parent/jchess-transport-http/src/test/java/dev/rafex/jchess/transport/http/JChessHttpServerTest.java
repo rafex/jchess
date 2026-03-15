@@ -109,6 +109,38 @@ final class JChessHttpServerTest {
         }
     }
 
+    @Test
+    void shouldListRecentGames(@TempDir Path tempDir) throws Exception {
+        JChessHttpServer.ServerRuntime runtime = startRuntime(tempDir);
+        int port = ((ServerConnector) runtime.runner().server().getConnectors()[0]).getLocalPort();
+        HttpClient client = HttpClient.newHttpClient();
+        var json = JsonCodecBuilder.create().build();
+
+        try {
+            client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/games"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString("""
+                                    {"color":"white","opponent":"human","whitePlayerName":"Alice","blackPlayerName":"Bob"}
+                                    """))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            HttpResponse<String> listed = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/games?limit=5"))
+                            .GET()
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(200, listed.statusCode());
+            JsonNode listedJson = json.readTree(listed.body());
+            assertEquals("games_list", listedJson.get("type").asText());
+            assertTrue(listedJson.at("/data/games").isArray());
+            assertEquals(1, listedJson.at("/data/games").size());
+            assertEquals("Alice", listedJson.at("/data/games/0/whitePlayerName").asText());
+        } finally {
+            runtime.runner().stop();
+        }
+    }
+
     private JChessHttpServer.ServerRuntime startRuntime(Path tempDir) throws Exception {
         EngineFacade engine = new ChessEngineService(
                 new SqliteGameRepository(tempDir.resolve("jchess-http-test.db")),

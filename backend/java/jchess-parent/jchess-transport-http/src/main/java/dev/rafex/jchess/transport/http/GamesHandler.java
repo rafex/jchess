@@ -45,7 +45,7 @@ public final class GamesHandler extends NonBlockingResourceHandler {
     @Override
     protected List<Route> routes() {
         return List.of(
-                Route.of("/", Set.of("POST")),
+                Route.of("/", Set.of("GET", "POST")),
                 Route.of("/{sessionId}", Set.of("GET")),
                 Route.of("/{sessionId}/join", Set.of("POST")),
                 Route.of("/{sessionId}/moves", Set.of("POST")),
@@ -57,6 +57,13 @@ public final class GamesHandler extends NonBlockingResourceHandler {
     @Override
     public boolean get(HttpExchange exchange) {
         try {
+            if ("/api/v1/games".equals(exchange.path()) || "/api/v1/games/".equals(exchange.path())) {
+                String limitValue = exchange.queryFirst("limit");
+                int limit = limitValue == null || limitValue.isBlank() ? 20 : Integer.parseInt(limitValue);
+                exchange.json(200, ApiEnvelope.ok("games_list",
+                        Map.of("games", presenter.summaries(engineFacade.listGames(limit)).stream().map(summary -> summary.toMap()).toList())).toMap());
+                return true;
+            }
             String sessionId = exchange.pathParam("sessionId");
             if (exchange.path().endsWith("/pgn")) {
                 exchange.json(200, ApiEnvelope.ok("pgn",
@@ -88,6 +95,7 @@ public final class GamesHandler extends NonBlockingResourceHandler {
                         parseSide(body.path("color").asText(null)),
                         parseOpponent(body.path("opponent").asText(null)),
                         LlmProvider.fromCliValue(textOrNull(body, "llm")),
+                        textOrDefault(body, "timeControl", "5+0"),
                         textOrDefault(body, "whitePlayerName", "white"),
                         textOrDefault(body, "blackPlayerName", "black")
                 ));

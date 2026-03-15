@@ -12,6 +12,9 @@ public record GameSnapshot(
         GameEndReason endReason,
         Position position,
         Side humanSide,
+        String timeControl,
+        long whiteClockMs,
+        long blackClockMs,
         ParticipantType whiteParticipant,
         ParticipantType blackParticipant,
         UUID whitePlayerId,
@@ -34,6 +37,7 @@ public record GameSnapshot(
         result = Objects.requireNonNull(result, "result must not be null");
         endReason = Objects.requireNonNull(endReason, "endReason must not be null");
         position = Objects.requireNonNull(position, "position must not be null");
+        timeControl = timeControl == null || timeControl.isBlank() ? "5+0" : timeControl;
         whiteParticipant = Objects.requireNonNull(whiteParticipant, "whiteParticipant must not be null");
         blackParticipant = Objects.requireNonNull(blackParticipant, "blackParticipant must not be null");
         whitePlayerId = Objects.requireNonNull(whitePlayerId, "whitePlayerId must not be null");

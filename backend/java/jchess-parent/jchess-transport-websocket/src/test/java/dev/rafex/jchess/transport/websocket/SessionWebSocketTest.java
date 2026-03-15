@@ -6,6 +6,7 @@ import dev.rafex.jchess.domain.model.EngineInfo;
 import dev.rafex.jchess.domain.model.GameSessionAccess;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
+import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.Move;
 import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.Position;
@@ -115,6 +116,11 @@ final class SessionWebSocketTest {
 
         @Override
         public GameSnapshot loadGame(UUID sessionId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<GameSummary> listGames(int limit) {
             throw new UnsupportedOperationException();
         }
 

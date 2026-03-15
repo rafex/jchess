@@ -18,6 +18,9 @@ public final class ApiPresenter {
                 snapshot.endReason().name(),
                 snapshot.position().sideToMove().name(),
                 snapshot.humanSide() == null ? null : snapshot.humanSide().name(),
+                snapshot.timeControl(),
+                snapshot.whiteClockMs(),
+                snapshot.blackClockMs(),
                 snapshot.position().toFen(),
                 snapshot.version(),
                 snapshot.createdAt().toString(),
@@ -44,6 +47,9 @@ public final class ApiPresenter {
                 snapshot.endReason(),
                 snapshot.turn(),
                 snapshot.humanSide(),
+                snapshot.timeControl(),
+                snapshot.whiteClockMs(),
+                snapshot.blackClockMs(),
                 snapshot.fen(),
                 snapshot.version(),
                 snapshot.createdAt(),
@@ -65,6 +71,10 @@ public final class ApiPresenter {
 
     public List<ApiThemeDto> themes(List<BoardTheme> themes) {
         return themes.stream().map(theme -> new ApiThemeDto(theme.name(), theme.description())).toList();
+    }
+
+    public List<ApiGameSummaryDto> summaries(List<dev.rafex.jchess.domain.model.GameSummary> games) {
+        return games.stream().map(ApiGameSummaryDto::from).toList();
     }
 
     private ApiPlayerDto player(GamePlayerAccess access, ConnectionStateView connectionStateView) {

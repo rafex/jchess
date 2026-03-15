@@ -5,9 +5,21 @@ const state = reactive({
   canInstall: false,
   isInstalled: window.matchMedia('(display-mode: standalone)').matches,
   isOffline: !navigator.onLine,
+  refreshingCache: false,
 })
 
 export function registerPwa() {
+  if (!('serviceWorker' in navigator)) {
+    return
+  }
+
+  if (!import.meta.env.PROD) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => registration.unregister())
+    })
+    return
+  }
+
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault()
     state.installPrompt = event
@@ -28,17 +40,16 @@ export function registerPwa() {
     state.isOffline = true
   })
 
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', async () => {
-      await navigator.serviceWorker.register('/sw.js')
-    })
-  }
+  window.addEventListener('load', async () => {
+    await navigator.serviceWorker.register('/sw.js')
+  })
 }
 
 export function usePwaState() {
   return {
     state,
     canInstall: computed(() => state.canInstall && !state.isInstalled),
+    canRefreshCache: computed(() => 'serviceWorker' in navigator && 'caches' in window),
   }
 }
 
@@ -56,4 +67,28 @@ export async function promptPwaInstall() {
   state.installPrompt = null
   state.canInstall = false
   return true
+}
+
+export async function refreshPwaCache() {
+  if (!('serviceWorker' in navigator) || !('caches' in window)) {
+    window.location.reload()
+    return
+  }
+
+  state.refreshingCache = true
+
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(registrations.map(async (registration) => {
+      await registration.update().catch(() => {})
+      if (!import.meta.env.PROD) {
+        await registration.unregister().catch(() => {})
+      }
+    }))
+
+    const cacheKeys = await caches.keys()
+    await Promise.all(cacheKeys.map((key) => caches.delete(key)))
+  } finally {
+    window.location.reload()
+  }
 }

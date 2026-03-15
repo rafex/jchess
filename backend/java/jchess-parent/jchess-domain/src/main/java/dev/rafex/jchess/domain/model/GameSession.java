@@ -1,6 +1,7 @@
 package dev.rafex.jchess.domain.model;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ public record GameSession(
         ParticipantType blackParticipant,
         Side preferredHumanSide,
         LlmProvider llmProvider,
+        String timeControl,
         Position currentPosition,
         GameStatus status,
         GameResult result,
@@ -20,6 +22,9 @@ public record GameSession(
         String blackPlayerName,
         String whitePlayerToken,
         String blackPlayerToken,
+        long whiteClockMs,
+        long blackClockMs,
+        Instant clockStartedAt,
         long version,
         Instant createdAt,
         Instant updatedAt
@@ -32,12 +37,17 @@ public record GameSession(
         status = Objects.requireNonNull(status, "status must not be null");
         result = Objects.requireNonNull(result, "result must not be null");
         endReason = Objects.requireNonNull(endReason, "endReason must not be null");
+        timeControl = timeControl == null || timeControl.isBlank() ? "5+0" : timeControl;
         whitePlayerId = Objects.requireNonNull(whitePlayerId, "whitePlayerId must not be null");
         blackPlayerId = Objects.requireNonNull(blackPlayerId, "blackPlayerId must not be null");
         whitePlayerName = Objects.requireNonNull(whitePlayerName, "whitePlayerName must not be null");
         blackPlayerName = Objects.requireNonNull(blackPlayerName, "blackPlayerName must not be null");
         whitePlayerToken = Objects.requireNonNull(whitePlayerToken, "whitePlayerToken must not be null");
         blackPlayerToken = Objects.requireNonNull(blackPlayerToken, "blackPlayerToken must not be null");
+        if (whiteClockMs < 0 || blackClockMs < 0) {
+            throw new IllegalArgumentException("clock values must not be negative");
+        }
+        clockStartedAt = Objects.requireNonNull(clockStartedAt, "clockStartedAt must not be null");
         if (version < 0) {
             throw new IllegalArgumentException("version must not be negative");
         }
@@ -51,6 +61,15 @@ public record GameSession(
 
     public boolean machineToMove() {
         return participantFor(currentPosition.sideToMove()) == ParticipantType.MACHINE;
+    }
+
+    public long remainingClockMs(Side side, Instant now) {
+        long base = side == Side.WHITE ? whiteClockMs : blackClockMs;
+        if (status != GameStatus.ACTIVE || currentPosition.sideToMove() != side) {
+            return base;
+        }
+        long elapsed = Math.max(0L, Duration.between(clockStartedAt, now).toMillis());
+        return Math.max(0L, base - elapsed);
     }
 
     public UUID playerIdFor(Side side) {
@@ -89,12 +108,25 @@ public record GameSession(
     }
 
     public GameSession withState(Position position, GameStatus nextStatus, GameResult nextResult, GameEndReason nextEndReason) {
+        return withStateAndClock(position, nextStatus, nextResult, nextEndReason, whiteClockMs, blackClockMs, clockStartedAt);
+    }
+
+    public GameSession withStateAndClock(
+            Position position,
+            GameStatus nextStatus,
+            GameResult nextResult,
+            GameEndReason nextEndReason,
+            long nextWhiteClockMs,
+            long nextBlackClockMs,
+            Instant nextClockStartedAt
+    ) {
         return new GameSession(
                 sessionId,
                 whiteParticipant,
                 blackParticipant,
                 preferredHumanSide,
                 llmProvider,
+                timeControl,
                 position,
                 nextStatus,
                 nextResult,
@@ -105,6 +137,9 @@ public record GameSession(
                 blackPlayerName,
                 whitePlayerToken,
                 blackPlayerToken,
+                nextWhiteClockMs,
+                nextBlackClockMs,
+                nextClockStartedAt,
                 version + 1,
                 createdAt,
                 Instant.now()

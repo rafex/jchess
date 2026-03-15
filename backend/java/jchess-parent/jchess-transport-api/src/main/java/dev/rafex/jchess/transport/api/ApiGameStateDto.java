@@ -11,6 +11,9 @@ public record ApiGameStateDto(
         String endReason,
         String turn,
         String humanSide,
+        String timeControl,
+        long whiteClockMs,
+        long blackClockMs,
         String fen,
         long version,
         String createdAt,
@@ -31,6 +34,9 @@ public record ApiGameStateDto(
         map.put("endReason", endReason);
         map.put("turn", turn);
         map.put("humanSide", humanSide);
+        map.put("timeControl", timeControl);
+        map.put("whiteClockMs", whiteClockMs);
+        map.put("blackClockMs", blackClockMs);
         map.put("fen", fen);
         map.put("version", version);
         map.put("createdAt", createdAt);

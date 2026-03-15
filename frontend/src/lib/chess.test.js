@@ -40,7 +40,8 @@ describe('chess helpers', () => {
   })
 
   it('computes board square colors consistently', () => {
-    expect(squareColor({ fileIndex: 0, rankIndex: 0 })).toBe('dark')
-    expect(squareColor({ fileIndex: 1, rankIndex: 0 })).toBe('light')
+    expect(squareColor({ fileIndex: 0, rankIndex: 0 })).toBe('light')
+    expect(squareColor({ fileIndex: 1, rankIndex: 0 })).toBe('dark')
+    expect(squareColor({ fileIndex: 7, rankIndex: 7 })).toBe('light')
   })
 })

@@ -67,6 +67,20 @@ const afterPromotion = {
 }
 
 test('creates a game and promotes a pawn from the board UI', async ({ page }) => {
+  await page.route('**/api/v1/games?limit=12', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        v: 1,
+        type: 'games_list',
+        data: {
+          games: [],
+        },
+      }),
+    })
+  })
+
   await page.route('**/api/v1/games', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(createdGame) })
@@ -101,4 +115,40 @@ test('creates a game and promotes a pawn from the board UI', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Elige promoción' })).toBeVisible()
   await page.getByRole('button', { name: 'Reina' }).click()
   await expect(page.getByText('a8=Q')).toBeVisible()
+})
+
+test('starts an offline local game and shows import-export tools', async ({ page }) => {
+  await page.route('**/api/v1/games?limit=12', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        v: 1,
+        type: 'games_list',
+        data: {
+          games: [
+            {
+              sessionId: '22222222-2222-2222-2222-222222222222',
+              status: 'ACTIVE',
+              result: 'IN_PROGRESS',
+              turn: 'WHITE',
+              whitePlayerName: 'Alice',
+              blackPlayerName: 'Bob',
+              moveCount: 12,
+              createdAt: '2026-03-15T00:00:00Z',
+              updatedAt: '2026-03-15T00:00:00Z',
+            },
+          ],
+        },
+      }),
+    })
+  })
+
+  await page.goto('/')
+  await expect(page.getByText('Alice vs Bob')).toBeVisible()
+  await page.getByLabel('Rival').selectOption('offline-local')
+  await page.getByRole('button', { name: 'Empezar a jugar' }).click()
+  await expect(page).toHaveURL(/\/offline/)
+  await expect(page.getByRole('heading', { name: 'Importar / Exportar' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Copiar FEN' })).toBeVisible()
 })

@@ -22,6 +22,7 @@ export async function createGame({
   color,
   opponent,
   llm,
+  timeControl,
   whitePlayerName,
   blackPlayerName,
   localHotseat = false,
@@ -33,6 +34,7 @@ export async function createGame({
       color,
       opponent,
       llm,
+      timeControl,
       whitePlayerName,
       blackPlayerName,
       localHotseat,
@@ -43,6 +45,10 @@ export async function createGame({
 
 export async function loadGame(sessionId) {
   return request(`/api/v1/games/${sessionId}`)
+}
+
+export async function listGames(limit = 12) {
+  return request(`/api/v1/games?limit=${limit}`)
 }
 
 export async function joinGame(sessionId, playerToken) {

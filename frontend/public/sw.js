@@ -1,5 +1,5 @@
-const CACHE_NAME = 'jchess-shell-v1'
-const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-icon.svg', '/pwa-maskable.svg', '/favicon.svg']
+const CACHE_NAME = 'jchess-shell-v3'
+const APP_SHELL = ['/', '/offline', '/manifest.webmanifest', '/pwa-icon.svg', '/pwa-maskable.svg', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

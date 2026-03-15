@@ -6,6 +6,7 @@ import dev.rafex.jchess.domain.model.GameResult;
 import dev.rafex.jchess.domain.model.GameSession;
 import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameStatus;
+import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.LlmProvider;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.RecordedMove;
@@ -85,6 +86,53 @@ public final class SqliteGameRepository implements GameRepository {
         }
     }
 
+    @Override
+    public List<GameSummary> listRecent(int limit) {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     select
+                         session_id,
+                         status,
+                         result,
+                         end_reason,
+                         white_player_name,
+                         black_player_name,
+                         current_fen,
+                         created_at,
+                         updated_at,
+                         (
+                             select count(*)
+                             from game_move
+                             where game_move.session_id = game_session.session_id
+                         ) as move_count
+                     from game_session
+                     order by updated_at desc
+                     limit ?
+                     """)) {
+            statement.setInt(1, Math.max(limit, 1));
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<GameSummary> summaries = new ArrayList<>();
+                while (resultSet.next()) {
+                    summaries.add(new GameSummary(
+                            UUID.fromString(resultSet.getString("session_id")),
+                            GameStatus.valueOf(resultSet.getString("status")),
+                            GameResult.valueOf(resultSet.getString("result")),
+                            GameEndReason.valueOf(resultSet.getString("end_reason")),
+                            resultSet.getString("white_player_name"),
+                            resultSet.getString("black_player_name"),
+                            FenCodec.parse(resultSet.getString("current_fen")).sideToMove(),
+                            resultSet.getInt("move_count"),
+                            Instant.parse(resultSet.getString("created_at")),
+                            Instant.parse(resultSet.getString("updated_at"))
+                    ));
+                }
+                return summaries;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("failed to list recent games", ex);
+        }
+    }
+
     private void migrate(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate("""
@@ -94,6 +142,7 @@ public final class SqliteGameRepository implements GameRepository {
                         black_participant text not null,
                         preferred_human_side text,
                         llm_provider text,
+                        time_control text not null default '5+0',
                         current_fen text not null,
                         status text not null,
                         result text not null default 'IN_PROGRESS',
@@ -104,6 +153,9 @@ public final class SqliteGameRepository implements GameRepository {
                         black_player_name text not null default 'black',
                         white_player_token text not null default '',
                         black_player_token text not null default '',
+                        white_clock_ms integer not null default 300000,
+                        black_clock_ms integer not null default 300000,
+                        clock_started_at text not null default '1970-01-01T00:00:00Z',
                         version integer not null default 0,
                         created_at text not null,
                         updated_at text not null default '1970-01-01T00:00:00Z'
@@ -126,12 +178,16 @@ public final class SqliteGameRepository implements GameRepository {
             statement.executeUpdate("create index if not exists idx_game_move_session on game_move(session_id)");
             ensureColumn(statement, "game_session", "result", "text not null default 'IN_PROGRESS'");
             ensureColumn(statement, "game_session", "end_reason", "text not null default 'NONE'");
+            ensureColumn(statement, "game_session", "time_control", "text not null default '5+0'");
             ensureColumn(statement, "game_session", "white_player_id", "text not null default ''");
             ensureColumn(statement, "game_session", "black_player_id", "text not null default ''");
             ensureColumn(statement, "game_session", "white_player_name", "text not null default 'white'");
             ensureColumn(statement, "game_session", "black_player_name", "text not null default 'black'");
             ensureColumn(statement, "game_session", "white_player_token", "text not null default ''");
             ensureColumn(statement, "game_session", "black_player_token", "text not null default ''");
+            ensureColumn(statement, "game_session", "white_clock_ms", "integer not null default 300000");
+            ensureColumn(statement, "game_session", "black_clock_ms", "integer not null default 300000");
+            ensureColumn(statement, "game_session", "clock_started_at", "text not null default '1970-01-01T00:00:00Z'");
             ensureColumn(statement, "game_session", "version", "integer not null default 0");
             ensureColumn(statement, "game_session", "updated_at", "text not null default '1970-01-01T00:00:00Z'");
             ensureColumn(statement, "game_move", "fen_before", "text not null default ''");
@@ -159,6 +215,7 @@ public final class SqliteGameRepository implements GameRepository {
                     black_participant,
                     preferred_human_side,
                     llm_provider,
+                    time_control,
                     current_fen,
                     status,
                     result,
@@ -169,15 +226,19 @@ public final class SqliteGameRepository implements GameRepository {
                     black_player_name,
                     white_player_token,
                     black_player_token,
+                    white_clock_ms,
+                    black_clock_ms,
+                    clock_started_at,
                     version,
                     created_at,
                     updated_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(session_id) do update set
                     white_participant = excluded.white_participant,
                     black_participant = excluded.black_participant,
                     preferred_human_side = excluded.preferred_human_side,
                     llm_provider = excluded.llm_provider,
+                    time_control = excluded.time_control,
                     current_fen = excluded.current_fen,
                     status = excluded.status,
                     result = excluded.result,
@@ -188,6 +249,9 @@ public final class SqliteGameRepository implements GameRepository {
                     black_player_name = excluded.black_player_name,
                     white_player_token = excluded.white_player_token,
                     black_player_token = excluded.black_player_token,
+                    white_clock_ms = excluded.white_clock_ms,
+                    black_clock_ms = excluded.black_clock_ms,
+                    clock_started_at = excluded.clock_started_at,
                     version = excluded.version,
                     created_at = excluded.created_at,
                     updated_at = excluded.updated_at
@@ -200,21 +264,25 @@ public final class SqliteGameRepository implements GameRepository {
             statement.setString(3, session.blackParticipant().name());
             statement.setString(4, session.preferredHumanSide() == null ? null : session.preferredHumanSide().name());
             statement.setString(5, session.llmProvider() == null ? null : session.llmProvider().name());
-            statement.setString(6, FenCodec.toFen(session.currentPosition()));
-            statement.setString(7, session.status().name());
-            statement.setString(8, session.result().name());
-            statement.setString(9, session.endReason().name());
-            statement.setString(10, session.whitePlayerId().toString());
-            statement.setString(11, session.blackPlayerId().toString());
-            statement.setString(12, session.whitePlayerName());
-            statement.setString(13, session.blackPlayerName());
-            statement.setString(14, session.whitePlayerToken());
-            statement.setString(15, session.blackPlayerToken());
-            statement.setLong(16, session.version());
-            statement.setString(17, session.createdAt().toString());
-            statement.setString(18, session.updatedAt().toString());
+            statement.setString(6, session.timeControl());
+            statement.setString(7, FenCodec.toFen(session.currentPosition()));
+            statement.setString(8, session.status().name());
+            statement.setString(9, session.result().name());
+            statement.setString(10, session.endReason().name());
+            statement.setString(11, session.whitePlayerId().toString());
+            statement.setString(12, session.blackPlayerId().toString());
+            statement.setString(13, session.whitePlayerName());
+            statement.setString(14, session.blackPlayerName());
+            statement.setString(15, session.whitePlayerToken());
+            statement.setString(16, session.blackPlayerToken());
+            statement.setLong(17, session.whiteClockMs());
+            statement.setLong(18, session.blackClockMs());
+            statement.setString(19, session.clockStartedAt().toString());
+            statement.setLong(20, session.version());
+            statement.setString(21, session.createdAt().toString());
+            statement.setString(22, session.updatedAt().toString());
             if (checkVersion) {
-                statement.setLong(19, expectedVersion);
+                statement.setLong(23, expectedVersion);
             }
             return statement.executeUpdate() > 0;
         }
@@ -263,6 +331,7 @@ public final class SqliteGameRepository implements GameRepository {
                     black_participant,
                     preferred_human_side,
                     llm_provider,
+                    time_control,
                     current_fen,
                     status,
                     result,
@@ -273,6 +342,9 @@ public final class SqliteGameRepository implements GameRepository {
                     black_player_name,
                     white_player_token,
                     black_player_token,
+                    white_clock_ms,
+                    black_clock_ms,
+                    clock_started_at,
                     version,
                     created_at,
                     updated_at
@@ -291,6 +363,7 @@ public final class SqliteGameRepository implements GameRepository {
                         ParticipantType.valueOf(resultSet.getString("black_participant")),
                         sideOrNull(resultSet.getString("preferred_human_side")),
                         llmProviderOrNull(resultSet.getString("llm_provider")),
+                        resultSet.getString("time_control"),
                         FenCodec.parse(resultSet.getString("current_fen")),
                         GameStatus.valueOf(resultSet.getString("status")),
                         GameResult.valueOf(resultSet.getString("result")),
@@ -301,6 +374,9 @@ public final class SqliteGameRepository implements GameRepository {
                         resultSet.getString("black_player_name"),
                         resultSet.getString("white_player_token"),
                         resultSet.getString("black_player_token"),
+                        resultSet.getLong("white_clock_ms"),
+                        resultSet.getLong("black_clock_ms"),
+                        Instant.parse(resultSet.getString("clock_started_at")),
                         resultSet.getLong("version"),
                         Instant.parse(resultSet.getString("created_at")),
                         Instant.parse(resultSet.getString("updated_at"))

@@ -19,18 +19,66 @@
         |  del encabezado. En iPhone/iPad usa Compartir y luego
         strong  Añadir a pantalla de inicio.
   StartGamePanel(@start='startGame' @join='joinRemoteGame')
+  section.home-view__lobby.glass-card
+    .home-view__lobby-head
+      div
+        span.pill Lobby
+        h2.home-view__section-title Partidas recientes
+      button.button.button--secondary(type='button' @click='refreshGames') Actualizar
+    p.home-view__empty(v-if='loadingGames') Cargando partidas...
+    p.home-view__empty(v-else-if='gamesError') {{ gamesError }}
+    p.home-view__empty(v-else-if='!games.length') Aún no hay partidas guardadas.
+    .home-view__games(v-else)
+      article.home-view__game-card(v-for='game in games' :key='game.sessionId')
+        .home-view__game-meta
+          h3 {{ game.whitePlayerName }} vs {{ game.blackPlayerName }}
+          .pill {{ game.status }}
+        p.home-view__game-detail Turno: {{ game.turn }} · Movimientos: {{ game.moveCount }}
+        p.home-view__game-detail Resultado: {{ game.result }}
+        .home-view__game-actions
+          button.button.button--tonal(type='button' @click='resumeGame(game.sessionId)') Abrir
+          code {{ shortSession(game.sessionId) }}
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import StartGamePanel from '../components/StartGamePanel.vue'
-import { createGame, joinGame } from '../lib/api'
+import { createGame, joinGame, listGames } from '../lib/api'
 import { useSessionStore } from '../lib/sessionStore'
 
 const router = useRouter()
+const route = useRoute()
 const sessionStore = useSessionStore()
+const games = ref([])
+const loadingGames = ref(false)
+const gamesError = ref('')
+
+onMounted(() => {
+  refreshGames()
+  maybeAutoJoinFromInvite()
+})
 
 async function startGame(payload) {
+  if (payload.opponent === 'offline-local') {
+    sessionStore.setSession({
+      sessionId: 'offline',
+      opponent: 'offline-local',
+      requesterSide: payload.color.toUpperCase(),
+      localHotseat: true,
+      perspective: payload.color.toUpperCase(),
+      tokens: { WHITE: null, BLACK: null },
+      inviteTokens: { WHITE: null, BLACK: null },
+      playerNames: {
+        WHITE: payload.whitePlayerName || 'White',
+        BLACK: payload.blackPlayerName || 'Black',
+      },
+      timeControl: payload.timeControl,
+    })
+    await router.push({ name: 'offline-game' })
+    return
+  }
+
   const response = await createGame(payload)
   const game = response.data.game
   const requester = response.data.requester
@@ -65,6 +113,7 @@ async function startGame(payload) {
     perspective: requester?.side || payload.color.toUpperCase(),
     tokens,
     inviteTokens,
+    timeControl: payload.timeControl,
     playerNames: {
       WHITE: game.players.find((player) => player.side === 'WHITE')?.displayName || payload.whitePlayerName,
       BLACK: game.players.find((player) => player.side === 'BLACK')?.displayName || payload.blackPlayerName,
@@ -93,6 +142,7 @@ async function joinRemoteGame(payload) {
       WHITE: null,
       BLACK: null,
     },
+    timeControl: sessionStore.state.timeControl,
     playerNames: {
       WHITE: game.players.find((player) => player.side === 'WHITE')?.displayName || 'White',
       BLACK: game.players.find((player) => player.side === 'BLACK')?.displayName || 'Black',
@@ -100,6 +150,53 @@ async function joinRemoteGame(payload) {
   })
 
   await router.push({ name: 'game', params: { sessionId: game.sessionId } })
+}
+
+async function refreshGames() {
+  loadingGames.value = true
+  gamesError.value = ''
+  try {
+    const response = await listGames()
+    games.value = response.data.games || []
+  } catch (error) {
+    gamesError.value = error.message || 'No fue posible cargar las partidas'
+  } finally {
+    loadingGames.value = false
+  }
+}
+
+async function maybeAutoJoinFromInvite() {
+  const sessionId = typeof route.query.sessionId === 'string' ? route.query.sessionId : ''
+  const playerToken = typeof route.query.playerToken === 'string' ? route.query.playerToken : ''
+
+  if (!sessionId || !playerToken) {
+    return
+  }
+
+  try {
+    await joinRemoteGame({ sessionId, playerToken })
+  } catch (error) {
+    gamesError.value = error.message || 'No fue posible abrir la invitación compartida'
+  }
+}
+
+async function resumeGame(sessionId) {
+  sessionStore.setSession({
+    sessionId,
+    opponent: 'human',
+    requesterSide: null,
+    localHotseat: false,
+    perspective: sessionStore.state.perspective,
+    tokens: { WHITE: null, BLACK: null },
+    inviteTokens: { WHITE: null, BLACK: null },
+    playerNames: sessionStore.state.playerNames,
+    timeControl: sessionStore.state.timeControl,
+  })
+  await router.push({ name: 'game', params: { sessionId } })
+}
+
+function shortSession(sessionId) {
+  return sessionId.slice(0, 8)
 }
 </script>
 
@@ -163,6 +260,66 @@ async function joinRemoteGame(payload) {
     p {
       color: var(--muted);
     }
+  }
+
+  &__lobby {
+    padding: 1.25rem;
+    display: grid;
+    gap: 1rem;
+  }
+
+  &__lobby-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  &__section-title {
+    margin: 0.55rem 0 0;
+    font-size: 1.4rem;
+    letter-spacing: -0.04em;
+  }
+
+  &__games {
+    display: grid;
+    gap: 0.9rem;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+
+  &__game-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  &__game-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+  }
+
+  &__game-detail,
+  &__empty {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  &__game-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
   }
 }
 </style>

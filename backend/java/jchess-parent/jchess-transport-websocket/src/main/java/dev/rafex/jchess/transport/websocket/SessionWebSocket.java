@@ -85,6 +85,7 @@ public final class SessionWebSocket {
                 parseSide(payload.get("color")),
                 parseOpponent(payload.get("opponent")),
                 LlmProvider.fromCliValue(string(payload.get("llm"))),
+                stringOrDefault(payload.get("timeControl"), "5+0"),
                 stringOrDefault(payload.get("whitePlayerName"), "white"),
                 stringOrDefault(payload.get("blackPlayerName"), "black")
         ));

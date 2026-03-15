@@ -21,6 +21,7 @@ import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameStatus;
+import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.LlmProvider;
 import dev.rafex.jchess.domain.model.Move;
 import dev.rafex.jchess.domain.model.MoveRequest;
@@ -31,6 +32,7 @@ import dev.rafex.jchess.domain.model.Position;
 import dev.rafex.jchess.domain.model.RecordedMove;
 import dev.rafex.jchess.domain.model.Side;
 import dev.rafex.jchess.domain.model.Square;
+import dev.rafex.jchess.domain.model.TimeControlSpec;
 import dev.rafex.jchess.ports.outbound.EngineTelemetry;
 import dev.rafex.jchess.ports.outbound.GameRepository;
 import dev.rafex.jchess.ports.outbound.MachineMovePort;
@@ -141,12 +143,14 @@ public final class ChessEngineService implements EngineFacade {
         ParticipantType blackParticipant = humanSide == Side.BLACK ? ParticipantType.HUMAN : opponentType;
 
         Instant createdAt = Instant.now();
+        TimeControlSpec timeControl = TimeControlSpec.parse(request.timeControl());
         GameSession session = new GameSession(
                 UUID.randomUUID(),
                 whiteParticipant,
                 blackParticipant,
                 humanSide,
                 request.llmProvider(),
+                request.timeControl(),
                 Position.initial(),
                 GameStatus.ACTIVE,
                 GameResult.IN_PROGRESS,
@@ -157,6 +161,9 @@ public final class ChessEngineService implements EngineFacade {
                 request.blackPlayerName(),
                 UUID.randomUUID().toString(),
                 UUID.randomUUID().toString(),
+                timeControl.initialMs(),
+                timeControl.initialMs(),
+                createdAt,
                 0,
                 createdAt,
                 createdAt
@@ -171,13 +178,20 @@ public final class ChessEngineService implements EngineFacade {
     @Override
     public GameSnapshot loadGame(UUID sessionId) {
         gameRepository.initialize();
-        return snapshot(loadGameState(sessionId));
+        GameState current = refreshClockState(loadGameState(sessionId), true);
+        return snapshot(current);
+    }
+
+    @Override
+    public List<GameSummary> listGames(int limit) {
+        gameRepository.initialize();
+        return gameRepository.listRecent(limit <= 0 ? 20 : limit);
     }
 
     @Override
     public GameSessionAccess joinGame(UUID sessionId, String playerToken) {
         gameRepository.initialize();
-        GameState state = loadGameState(sessionId);
+        GameState state = refreshClockState(loadGameState(sessionId), true);
         Side side = state.session().sideForToken(playerToken);
         return sessionAccess(state, state.session().playerAccess(side));
     }
@@ -185,7 +199,7 @@ public final class ChessEngineService implements EngineFacade {
     @Override
     public GameSnapshot submitMove(UUID sessionId, String notation) {
         gameRepository.initialize();
-        GameState current = requireActive(loadGameState(sessionId));
+        GameState current = requireActive(refreshClockState(loadGameState(sessionId), true));
         ensureHumanTurn(current);
 
         Position position = current.session().currentPosition();
@@ -202,7 +216,7 @@ public final class ChessEngineService implements EngineFacade {
     @Override
     public GameSnapshot submitMove(UUID sessionId, MoveRequest moveRequest) {
         gameRepository.initialize();
-        GameState current = requireActive(loadGameState(sessionId));
+        GameState current = requireActive(refreshClockState(loadGameState(sessionId), true));
         Side actingSide = current.session().sideForToken(moveRequest.playerToken());
         ensureSideToMove(current, actingSide);
 
@@ -220,7 +234,7 @@ public final class ChessEngineService implements EngineFacade {
     @Override
     public GameSnapshot undoLastMove(UUID sessionId) {
         gameRepository.initialize();
-        GameState current = loadGameState(sessionId);
+        GameState current = refreshClockState(loadGameState(sessionId), true);
         if (current.moves().isEmpty()) {
             throw new IllegalStateException("no moves to undo");
         }
@@ -245,7 +259,7 @@ public final class ChessEngineService implements EngineFacade {
     @Override
     public GameSnapshot resignGame(UUID sessionId, Side side) {
         gameRepository.initialize();
-        GameState current = requireActive(loadGameState(sessionId));
+        GameState current = requireActive(refreshClockState(loadGameState(sessionId), true));
         Side resigningSide = side == null ? current.session().preferredHumanSide() : side;
         GameSession resignedSession = current.session().withState(
                 current.session().currentPosition(),
@@ -338,6 +352,17 @@ public final class ChessEngineService implements EngineFacade {
     }
 
     private GameState appendMove(GameState current, String submittedNotation, Move move) {
+        Instant now = Instant.now();
+        Side actingSide = current.session().currentPosition().sideToMove();
+        long whiteClockMs = current.session().remainingClockMs(Side.WHITE, now);
+        long blackClockMs = current.session().remainingClockMs(Side.BLACK, now);
+        long incrementMs = TimeControlSpec.parse(current.session().timeControl()).incrementSeconds() * 1000L;
+        if (actingSide == Side.WHITE) {
+            whiteClockMs += incrementMs;
+        } else {
+            blackClockMs += incrementMs;
+        }
+
         Position before = current.session().currentPosition();
         Position after = positionUpdater.apply(before, move);
         List<Move> currentLegalMoves = legalMoves(before);
@@ -356,8 +381,67 @@ public final class ChessEngineService implements EngineFacade {
         List<RecordedMove> updatedMoves = new ArrayList<>(current.moves());
         updatedMoves.add(recordedMove);
         GameTermination termination = gameStateInspector.inspect(after, updatedMoves);
-        GameSession updatedSession = current.session().withState(after, termination.status(), termination.result(), termination.endReason());
+        GameSession updatedSession = current.session().withStateAndClock(
+                after,
+                termination.status(),
+                termination.result(),
+                termination.endReason(),
+                whiteClockMs,
+                blackClockMs,
+                now
+        );
         return new GameState(updatedSession, updatedMoves);
+    }
+
+    private GameState refreshClockState(GameState current, boolean persistIfChanged) {
+        GameSession session = current.session();
+        if (session.status() != GameStatus.ACTIVE) {
+            return current;
+        }
+
+        Instant now = Instant.now();
+        Side sideToMove = session.currentPosition().sideToMove();
+        long whiteClockMs = session.remainingClockMs(Side.WHITE, now);
+        long blackClockMs = session.remainingClockMs(Side.BLACK, now);
+        boolean changed = whiteClockMs != session.whiteClockMs() || blackClockMs != session.blackClockMs();
+
+        if ((sideToMove == Side.WHITE && whiteClockMs <= 0) || (sideToMove == Side.BLACK && blackClockMs <= 0)) {
+            GameSession timedOut = session.withStateAndClock(
+                    session.currentPosition(),
+                    GameStatus.FINISHED,
+                    sideToMove == Side.WHITE ? GameResult.BLACK_WIN : GameResult.WHITE_WIN,
+                    GameEndReason.TIME_FORFEIT,
+                    whiteClockMs,
+                    blackClockMs,
+                    now
+            );
+            GameState updated = new GameState(timedOut, current.moves());
+            if (persistIfChanged) {
+                persist(updated, session.version());
+            }
+            return updated;
+        }
+
+        if (!changed) {
+            return current;
+        }
+
+        GameState updated = new GameState(
+                session.withStateAndClock(
+                        session.currentPosition(),
+                        session.status(),
+                        session.result(),
+                        session.endReason(),
+                        whiteClockMs,
+                        blackClockMs,
+                        now
+                ),
+                current.moves()
+        );
+        if (persistIfChanged) {
+            persist(updated, session.version());
+        }
+        return updated;
     }
 
     private GameState applyTermination(GameState current, GameTermination termination) {
@@ -402,6 +486,9 @@ public final class ChessEngineService implements EngineFacade {
                 gameState.session().endReason(),
                 position,
                 gameState.session().preferredHumanSide(),
+                gameState.session().timeControl(),
+                gameState.session().remainingClockMs(Side.WHITE, Instant.now()),
+                gameState.session().remainingClockMs(Side.BLACK, Instant.now()),
                 gameState.session().whiteParticipant(),
                 gameState.session().blackParticipant(),
                 gameState.session().whitePlayerId(),

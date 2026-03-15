@@ -2,6 +2,7 @@ package dev.rafex.jchess.application;
 
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.GameState;
+import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.LlmProvider;
 import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.ParticipantType;
@@ -28,7 +29,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var snapshot = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "Alice", "Bob"));
+        var snapshot = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
 
         assertEquals(Side.WHITE, snapshot.humanSide());
         assertEquals(20, snapshot.legalMovesEnglish().size());
@@ -41,12 +42,12 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "Alice", "Bob"));
+        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
         var afterEnglish = service.submitMove(started.sessionId(), "Nf3");
 
         assertEquals("Nf3", afterEnglish.moves().getFirst().canonicalNotation());
 
-        var startedSpanish = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "Alice", "Bob"));
+        var startedSpanish = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
         var afterSpanish = service.submitMove(startedSpanish.sessionId(), "Cf3)");
 
         assertEquals("Nf3", afterSpanish.moves().getFirst().canonicalNotation());
@@ -57,7 +58,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new FixedMachineMovePort("e5"));
 
-        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.MACHINE, LlmProvider.GROQ, "Alice", "Bot"));
+        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.MACHINE, LlmProvider.GROQ, "5+0", "Alice", "Bot"));
         var afterMove = service.submitMove(started.sessionId(), "e4");
 
         assertEquals(2, afterMove.moves().size());
@@ -70,7 +71,7 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var started = service.startGameAccess(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "Alice", "Bob"));
+        var started = service.startGameAccess(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
         var afterMove = service.submitMove(started.snapshot().sessionId(), MoveRequest.of(started.requester().playerToken(), "e2", "e4", null));
 
         assertEquals("e2e4", afterMove.moves().getFirst().uci());
@@ -82,13 +83,26 @@ final class ChessEngineServiceTest {
         InMemoryGameRepository repository = new InMemoryGameRepository();
         ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
 
-        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "Alice", "Bob"));
+        var started = service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
         var played = service.submitMove(started.sessionId(), "e4");
         var undone = service.undoLastMove(started.sessionId());
 
         assertEquals(1, played.moves().size());
         assertEquals(0, undone.moves().size());
         assertTrue(service.exportPgn(started.sessionId()).contains("[White \"Alice\"]"));
+    }
+
+    @Test
+    void shouldListRecentGames() {
+        InMemoryGameRepository repository = new InMemoryGameRepository();
+        ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
+
+        service.startGame(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "5+0", "Alice", "Bob"));
+        service.startGame(new GameStartRequest(Side.BLACK, ParticipantType.HUMAN, null, "5+0", "Carol", "Dave"));
+
+        List<GameSummary> games = service.listGames(10);
+
+        assertEquals(2, games.size());
     }
 
     private static final class InMemoryGameRepository implements GameRepository {
@@ -106,6 +120,26 @@ final class ChessEngineServiceTest {
         @Override
         public Optional<GameState> findById(UUID sessionId) {
             return Optional.ofNullable(store.get(sessionId));
+        }
+
+        @Override
+        public List<GameSummary> listRecent(int limit) {
+            return store.values().stream()
+                    .sorted((left, right) -> right.session().updatedAt().compareTo(left.session().updatedAt()))
+                    .limit(limit)
+                    .map(state -> new GameSummary(
+                            state.session().sessionId(),
+                            state.session().status(),
+                            state.session().result(),
+                            state.session().endReason(),
+                            state.session().whitePlayerName(),
+                            state.session().blackPlayerName(),
+                            state.session().currentPosition().sideToMove(),
+                            state.moves().size(),
+                            state.session().createdAt(),
+                            state.session().updatedAt()
+                    ))
+                    .toList();
         }
 
         @Override

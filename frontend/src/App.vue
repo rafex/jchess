@@ -7,6 +7,7 @@
       .brand__copy by rafex
     nav.app-nav
       RouterLink.app-nav__link(to='/') Inicio
+      RefreshPwaButton
       InstallPwaButton
       .pill.pill--status(v-if='pwa.state.isOffline') Sin conexión
   main.app-main
@@ -15,6 +16,7 @@
 
 <script setup>
 import InstallPwaButton from './components/InstallPwaButton.vue'
+import RefreshPwaButton from './components/RefreshPwaButton.vue'
 import { usePwaState } from './lib/pwa'
 
 const pwa = usePwaState()

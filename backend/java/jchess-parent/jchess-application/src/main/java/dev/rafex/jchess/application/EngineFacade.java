@@ -4,6 +4,7 @@ import dev.rafex.jchess.domain.model.EngineInfo;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameSessionAccess;
 import dev.rafex.jchess.domain.model.GameStartRequest;
+import dev.rafex.jchess.domain.model.GameSummary;
 import dev.rafex.jchess.domain.model.Move;
 import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.Position;
@@ -13,6 +14,7 @@ import dev.rafex.jchess.ports.inbound.GameSessionUseCase;
 import dev.rafex.jchess.ports.inbound.MoveCalculationUseCase;
 
 import java.util.UUID;
+import java.util.List;
 
 public interface EngineFacade extends EngineQueryUseCase, MoveCalculationUseCase, GameSessionUseCase {
 
@@ -33,6 +35,9 @@ public interface EngineFacade extends EngineQueryUseCase, MoveCalculationUseCase
 
     @Override
     GameSnapshot loadGame(UUID sessionId);
+
+    @Override
+    List<GameSummary> listGames(int limit);
 
     @Override
     GameSessionAccess joinGame(UUID sessionId, String playerToken);

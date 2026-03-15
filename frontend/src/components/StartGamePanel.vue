@@ -12,9 +12,18 @@
       label.field
         span.field__label Rival
         select.field__control(v-model='form.opponent')
+          option(value='offline-local') Offline local
           option(value='machine') Máquina
           option(value='human') Humano local
           option(value='human-remote') Humano remoto
+      label.field
+        span.field__label Reloj
+        select.field__control(v-model='form.timeControl')
+          option(value='3+0') 3 min
+          option(value='5+0') 5 min
+          option(value='10+0') 10 min
+          option(value='10+5') 10 min + 5s
+          option(value='15+10') 15 min + 10s
       label.field(v-if='form.opponent === "machine"')
         span.field__label Motor remoto
         select.field__control(v-model='form.llm')
@@ -115,6 +124,7 @@ const form = reactive({
   blackPlayerName: 'Bot',
   colorMode: 'direct',
   color: 'white',
+  timeControl: '5+0',
 })
 
 const joinForm = reactive({
@@ -164,10 +174,11 @@ async function handleSubmit() {
   error.value = ''
 
   try {
-        await emit('start', {
+    await emit('start', {
       opponent: form.opponent === 'human-remote' ? 'human' : form.opponent,
       llm: form.llm || null,
       color: resolvedColor.value,
+      timeControl: form.timeControl,
       whitePlayerName: form.whitePlayerName || 'White',
       blackPlayerName: form.blackPlayerName || (form.opponent === 'machine' ? 'Machine' : 'Black'),
       localHotseat: form.opponent === 'human',

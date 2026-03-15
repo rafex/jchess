@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import GameView from '../views/GameView.vue'
+import OfflineGameView from '../views/OfflineGameView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -23,6 +24,14 @@ const router = createRouter({
       props: true,
       meta: {
         title: 'JChess | Partida',
+      },
+    },
+    {
+      path: '/offline',
+      name: 'offline-game',
+      component: OfflineGameView,
+      meta: {
+        title: 'JChess | Offline',
       },
     },
   ],

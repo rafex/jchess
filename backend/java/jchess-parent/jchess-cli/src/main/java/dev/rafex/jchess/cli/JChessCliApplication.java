@@ -60,6 +60,7 @@ public final class JChessCliApplication {
                 cliCommand.color(),
                 cliCommand.opponent(),
                 cliCommand.llmProvider(),
+                "5+0",
                 cliCommand.whitePlayerName(),
                 cliCommand.blackPlayerName()
         ));
@@ -76,6 +77,7 @@ public final class JChessCliApplication {
                     cliCommand.color(),
                     cliCommand.opponent(),
                     cliCommand.llmProvider(),
+                    "5+0",
                     cliCommand.whitePlayerName(),
                     cliCommand.blackPlayerName()
             ));
