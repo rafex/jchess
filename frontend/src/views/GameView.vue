@@ -202,12 +202,16 @@ function syncBoardHeight() {
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
+    background:
+      radial-gradient(circle at top right, rgba(255, 138, 102, 0.1), transparent 26%),
+      linear-gradient(180deg, rgba(25, 36, 47, 0.94), rgba(19, 29, 38, 0.9));
   }
 
   &__headline {
     h1 {
       margin: 0.7rem 0 0.45rem;
       font-size: clamp(1.7rem, 4vw, 3rem);
+      letter-spacing: -0.05em;
     }
 
     p {
@@ -245,6 +249,7 @@ function syncBoardHeight() {
 
 .panel {
   padding: 1.2rem;
+  background: linear-gradient(180deg, rgba(24, 35, 46, 0.96), rgba(19, 29, 38, 0.92));
 
   &__title {
     margin: 0 0 0.85rem;
@@ -269,7 +274,7 @@ function syncBoardHeight() {
 
   &__hint {
     margin-left: 0.5rem;
-    color: var(--accent);
+    color: var(--primary);
   }
 
   &__message {
