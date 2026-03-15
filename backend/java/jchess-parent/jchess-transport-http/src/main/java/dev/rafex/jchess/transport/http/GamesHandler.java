@@ -83,6 +83,7 @@ public final class GamesHandler extends NonBlockingResourceHandler {
             String path = exchange.path();
             if ("/api/v1/games/".equals(path) || "/api/v1/games".equals(path)) {
                 boolean localHotseat = body.path("localHotseat").asBoolean(false);
+                boolean includePlayerTokens = body.path("includePlayerTokens").asBoolean(false);
                 GameSessionAccess access = engineFacade.startGameAccess(new GameStartRequest(
                         parseSide(body.path("color").asText(null)),
                         parseOpponent(body.path("opponent").asText(null)),
@@ -91,7 +92,7 @@ public final class GamesHandler extends NonBlockingResourceHandler {
                         textOrDefault(body, "blackPlayerName", "black")
                 ));
                 httpSupport.created(exchange, ApiEnvelope.ok("game_created",
-                        presenter.access(access, connectionState(access.snapshot().sessionId())).toMap(localHotseat)).toMap());
+                        presenter.access(access, connectionState(access.snapshot().sessionId())).toMap(localHotseat || includePlayerTokens)).toMap());
                 return true;
             }
 

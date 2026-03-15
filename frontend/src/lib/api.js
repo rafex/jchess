@@ -25,6 +25,7 @@ export async function createGame({
   whitePlayerName,
   blackPlayerName,
   localHotseat = false,
+  includePlayerTokens = false,
 }) {
   return request('/api/v1/games', {
     method: 'POST',
@@ -35,12 +36,22 @@ export async function createGame({
       whitePlayerName,
       blackPlayerName,
       localHotseat,
+      includePlayerTokens,
     }),
   })
 }
 
 export async function loadGame(sessionId) {
   return request(`/api/v1/games/${sessionId}`)
+}
+
+export async function joinGame(sessionId, playerToken) {
+  return request(`/api/v1/games/${sessionId}/join`, {
+    method: 'POST',
+    body: JSON.stringify({
+      playerToken,
+    }),
+  })
 }
 
 export async function submitMove(sessionId, playerToken, from, to, promotion = null) {

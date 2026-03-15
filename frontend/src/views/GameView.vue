@@ -8,7 +8,7 @@
     .game-view__actions
       button.button.button--secondary(type='button' @click='flipBoard') Girar tablero
       button.button.button--secondary(type='button' @click='leaveGame') Salir
-      button.button.button--primary(type='button' @click='resign') Rendirse
+      button.button.button--primary(type='button' :disabled='submittingMove || game.status !== "ACTIVE"' @click='resign') Rendirse
 
   section.game-view__layout
     .game-view__board-shell(ref='boardShell')
@@ -17,7 +17,17 @@
         :legal-moves-uci='game.legalMovesUci'
         :perspective='perspective'
         :active-side='game.turn'
+        :interactive='canInteractWithBoard'
+        :busy='boardBusy'
+        :busy-label='boardBusyLabel'
         @move-intent='submitBoardMove'
+      )
+      PromotionDialog(
+        :open='promotionState.open'
+        :subtitle='promotionSubtitle'
+        :options='promotionChoices'
+        @select='confirmPromotion'
+        @cancel='cancelPromotion'
       )
     aside.game-view__sidebar(:style='sidebarStyle')
       .glass-card.panel
@@ -35,6 +45,9 @@
           li
             strong FEN:
             code.panel__code {{ game.fen }}
+          li
+            strong Conexión:
+            span  {{ connectionLabel }}
       .glass-card.panel
         h2.panel__title Jugadores
         ul.panel__list
@@ -42,6 +55,15 @@
             strong {{ player.side }}:
             span  {{ player.displayName }}
             small.panel__hint(v-if='player.side === currentControlSide') control actual
+            small.panel__hint(v-else-if='player.connected') conectado
+      .glass-card.panel(v-if='showRemoteInvite')
+        h2.panel__title Invitación remota
+        p.panel__message Comparte estos accesos con cada jugador. El token da control de ese color.
+        .panel__invite(v-for='invite in remoteInvites' :key='invite.side')
+          strong {{ invite.side }}
+          code.panel__code {{ invite.sessionId }}
+          code.panel__code {{ invite.token }}
+          button.button.button--tonal(type='button' @click='copyInvite(invite)') Copiar acceso
       .glass-card.panel.panel--moves
         h2.panel__title Movimientos
         .panel__moves-scroll
@@ -63,7 +85,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChessBoard from '../components/ChessBoard.vue'
 import CubesLoader from '../components/CubesLoader.vue'
+import PromotionDialog from '../components/PromotionDialog.vue'
 import { loadGame, resignGame, submitMove } from '../lib/api'
+import { promotionOptions } from '../lib/chess'
+import { createGameSocket } from '../lib/realtime'
 import { useSessionStore } from '../lib/sessionStore'
 
 const route = useRoute()
@@ -75,7 +100,14 @@ const feedback = ref('')
 const perspective = ref(sessionStore.state.perspective || 'WHITE')
 const boardShell = ref(null)
 const boardHeight = ref(0)
+const submittingMove = ref(false)
+const socketStatus = ref('idle')
+const promotionState = ref({
+  open: false,
+  move: null,
+})
 let boardObserver = null
+let socketClient = null
 
 const title = computed(() => {
   if (!game.value) {
@@ -88,10 +120,26 @@ const subtitle = computed(() => {
   if (!game.value) {
     return ''
   }
+  if (game.value.status !== 'ACTIVE') {
+    return `Partida finalizada por ${game.value.endReason}`
+  }
+  if (submittingMove.value) {
+    return sessionStore.state.opponent === 'machine'
+      ? 'El motor está pensando su respuesta...'
+      : 'Enviando movimiento...'
+  }
+  if (promotionState.value.open) {
+    return 'Selecciona la pieza para promocionar el peón.'
+  }
+  if (isRemoteHuman.value && game.value.turn !== currentControlSide.value) {
+    return 'Esperando el movimiento del rival en tiempo real.'
+  }
   return game.value.result === 'IN_PROGRESS'
     ? `Turno actual: ${game.value.turn}`
     : `Partida finalizada por ${game.value.endReason}`
 })
+
+const isRemoteHuman = computed(() => sessionStore.state.opponent === 'human' && !sessionStore.state.localHotseat)
 
 const currentControlSide = computed(() => {
   if (!game.value) {
@@ -102,8 +150,66 @@ const currentControlSide = computed(() => {
     return game.value.turn
   }
 
-  return Object.entries(sessionStore.state.tokens).find(([, token]) => token)?.[0] || 'WHITE'
+  return sessionStore.state.requesterSide || 'WHITE'
 })
+
+const canInteractWithBoard = computed(() => {
+  if (!game.value || game.value.status !== 'ACTIVE') {
+    return false
+  }
+
+  if (promotionState.value.open || submittingMove.value) {
+    return false
+  }
+
+  return game.value.turn === currentControlSide.value
+})
+
+const boardBusy = computed(() => submittingMove.value || promotionState.value.open)
+
+const boardBusyLabel = computed(() => {
+  if (promotionState.value.open) {
+    return 'Elige promoción'
+  }
+  if (submittingMove.value) {
+    return sessionStore.state.opponent === 'machine'
+      ? 'El motor está pensando...'
+      : 'Enviando jugada...'
+  }
+  if (isRemoteHuman.value && game.value && game.value.turn !== currentControlSide.value && game.value.status === 'ACTIVE') {
+    return 'Esperando al rival...'
+  }
+  return ''
+})
+
+const promotionChoices = computed(() => promotionOptions(currentControlSide.value))
+const promotionSubtitle = computed(() => `Movimiento ${promotionState.value.move?.from || ''} → ${promotionState.value.move?.to || ''}`)
+const connectionLabel = computed(() => {
+  if (!isRemoteHuman.value) {
+    return 'No requerida'
+  }
+  switch (socketStatus.value) {
+    case 'connected':
+      return 'En vivo'
+    case 'connecting':
+      return 'Conectando...'
+    case 'error':
+      return 'Error de enlace'
+    case 'disconnected':
+      return 'Desconectado'
+    default:
+      return 'Inactivo'
+  }
+})
+const showRemoteInvite = computed(() => isRemoteHuman.value
+  && Object.values(sessionStore.state.inviteTokens || {}).some(Boolean))
+const remoteInvites = computed(() => ['WHITE', 'BLACK']
+  .filter((side) => sessionStore.state.inviteTokens?.[side])
+  .map((side) => ({
+    side,
+    sessionId: game.value?.sessionId || sessionStore.state.sessionId,
+    token: sessionStore.state.inviteTokens[side],
+  })))
 
 const sidebarStyle = computed(() => {
   if (!boardHeight.value) {
@@ -120,6 +226,7 @@ onMounted(async () => {
   await refreshGame()
   await nextTick()
   syncBoardHeight()
+  connectRealtime()
   if (typeof ResizeObserver !== 'undefined' && boardShell.value) {
     boardObserver = new ResizeObserver(() => {
       syncBoardHeight()
@@ -130,6 +237,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   boardObserver?.disconnect()
+  socketClient?.disconnect()
 })
 
 watch(() => game.value?.fen, async () => {
@@ -146,27 +254,71 @@ async function refreshGame() {
 }
 
 async function submitBoardMove(move) {
+  if (!game.value || game.value.status !== 'ACTIVE') {
+    return
+  }
+
+  if (move.promotionOptions?.length) {
+    promotionState.value = {
+      open: true,
+      move,
+    }
+    return
+  }
+
+  await performMove(move)
+}
+
+async function performMove(move) {
   try {
     feedback.value = ''
+    submittingMove.value = true
     const playerToken = sessionStore.state.tokens[currentControlSide.value]
-    const response = await submitMove(game.value.sessionId, playerToken, move.from, move.to, move.promotion)
-    game.value = response.data
+    if (isRemoteHuman.value) {
+      const sent = socketClient?.send('move', {
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion,
+      })
+      if (!sent) {
+        throw new Error('La conexión en tiempo real no está lista')
+      }
+    } else {
+      const response = await submitMove(game.value.sessionId, playerToken, move.from, move.to, move.promotion)
+      game.value = response.data
+    }
 
     if (sessionStore.state.localHotseat) {
       perspective.value = game.value.turn
     }
   } catch (error) {
     feedback.value = error.message || 'No se pudo aplicar el movimiento'
+  } finally {
+    if (!isRemoteHuman.value) {
+      submittingMove.value = false
+    }
   }
 }
 
 async function resign() {
   try {
+    submittingMove.value = true
     const playerToken = sessionStore.state.tokens[currentControlSide.value]
-    const response = await resignGame(game.value.sessionId, playerToken)
-    game.value = response.data
+    if (isRemoteHuman.value) {
+      const sent = socketClient?.send('resign')
+      if (!sent) {
+        throw new Error('La conexión en tiempo real no está lista')
+      }
+    } else {
+      const response = await resignGame(game.value.sessionId, playerToken)
+      game.value = response.data
+    }
   } catch (error) {
     feedback.value = error.message || 'No se pudo rendir la partida'
+  } finally {
+    if (!isRemoteHuman.value) {
+      submittingMove.value = false
+    }
   }
 }
 
@@ -188,6 +340,86 @@ function syncBoardHeight() {
   boardHeight.value = boardShell.value?.getBoundingClientRect().height
     ? Math.round(boardShell.value.getBoundingClientRect().height)
     : 0
+}
+
+function confirmPromotion(code) {
+  const move = promotionState.value.move
+  promotionState.value = { open: false, move: null }
+  if (!move) {
+    return
+  }
+  performMove({
+    ...move,
+    promotion: code,
+  })
+}
+
+function cancelPromotion() {
+  promotionState.value = { open: false, move: null }
+}
+
+function connectRealtime() {
+  if (!isRemoteHuman.value) {
+    return
+  }
+
+  const playerToken = sessionStore.state.tokens[currentControlSide.value]
+  if (!playerToken) {
+    feedback.value = 'No hay token local para conectarse a la partida remota'
+    return
+  }
+
+  socketClient = createGameSocket({
+    sessionId: route.params.sessionId,
+    playerToken,
+    onStatusChange(status) {
+      socketStatus.value = status
+    },
+    onEnvelope(envelope) {
+      if (envelope.error) {
+        feedback.value = envelope.error.message || 'Error en tiempo real'
+        submittingMove.value = false
+        return
+      }
+
+      switch (envelope.type) {
+        case 'player_joined':
+          if (envelope.data?.game) {
+            game.value = envelope.data.game
+          }
+          break
+        case 'game_state':
+        case 'move_submitted':
+        case 'move_undone':
+        case 'game_finished':
+        case 'player_disconnected':
+          if (envelope.data?.sessionId) {
+            game.value = envelope.data
+          }
+          submittingMove.value = false
+          if (sessionStore.state.localHotseat && game.value?.turn) {
+            perspective.value = game.value.turn
+          }
+          break
+        case 'turn_changed':
+          if (game.value) {
+            game.value.turn = envelope.data.turn
+            game.value.version = envelope.data.version
+          }
+          break
+        default:
+          break
+      }
+    },
+  })
+
+  socketClient.connect()
+}
+
+async function copyInvite(invite) {
+  const access = `Sesion: ${invite.sessionId}\nToken ${invite.side}: ${invite.token}`
+  await navigator.clipboard.writeText(access)
+  feedback.value = `Acceso ${invite.side} copiado al portapapeles`
 }
 </script>
 
@@ -280,6 +512,14 @@ function syncBoardHeight() {
   &__message {
     margin: 0;
     color: var(--danger);
+  }
+
+  &__invite {
+    display: grid;
+    gap: 0.5rem;
+    padding-top: 0.8rem;
+    margin-top: 0.8rem;
+    border-top: 1px solid var(--line);
   }
 
   &__moves-scroll {

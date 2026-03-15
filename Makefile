@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 BACKEND_DIR ?= backend
 
-.PHONY: help build build-without-tests test clean verify cli cli-new server frontend-install frontend-dev frontend-build
+.PHONY: help build build-without-tests test clean verify cli cli-new server frontend-install frontend-dev frontend-build frontend-test frontend-e2e
 
 help:
 	@echo "Targets:"
@@ -19,6 +19,8 @@ help:
 	@echo "  make frontend-install    -> install frontend dependencies"
 	@echo "  make frontend-dev        -> start frontend Vite server"
 	@echo "  make frontend-build      -> build frontend"
+	@echo "  make frontend-test       -> run frontend unit tests"
+	@echo "  make frontend-e2e        -> run frontend Playwright tests"
 
 build:
 	$(MAKE) -C $(BACKEND_DIR) build
@@ -52,3 +54,9 @@ frontend-dev:
 
 frontend-build:
 	$(MAKE) -C frontend build
+
+frontend-test:
+	$(MAKE) -C frontend test
+
+frontend-e2e:
+	$(MAKE) -C frontend e2e

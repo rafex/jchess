@@ -81,6 +81,16 @@ export function pieceAlt(pieceCode) {
   return pieceCode ? PIECES[pieceCode]?.alt || '' : ''
 }
 
+export function promotionOptions(side) {
+  const color = side === 'BLACK' ? 'b' : 'w'
+  return [
+    { code: 'q', label: 'Reina', pieceCode: `${color === 'w' ? 'Q' : 'q'}`, asset: pieceAsset(color === 'w' ? 'Q' : 'q') },
+    { code: 'r', label: 'Torre', pieceCode: `${color === 'w' ? 'R' : 'r'}`, asset: pieceAsset(color === 'w' ? 'R' : 'r') },
+    { code: 'b', label: 'Alfil', pieceCode: `${color === 'w' ? 'B' : 'b'}`, asset: pieceAsset(color === 'w' ? 'B' : 'b') },
+    { code: 'n', label: 'Caballo', pieceCode: `${color === 'w' ? 'N' : 'n'}`, asset: pieceAsset(color === 'w' ? 'N' : 'n') },
+  ]
+}
+
 export function legalMovesForSquare(legalMovesUci, square) {
   return legalMovesUci.filter((move) => move.startsWith(square))
 }

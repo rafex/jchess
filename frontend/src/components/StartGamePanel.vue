@@ -14,6 +14,7 @@
         select.field__control(v-model='form.opponent')
           option(value='machine') Máquina
           option(value='human') Humano local
+          option(value='human-remote') Humano remoto
       label.field(v-if='form.opponent === "machine"')
         span.field__label Motor remoto
         select.field__control(v-model='form.llm')
@@ -73,16 +74,36 @@
         span(v-if='loading') Creando partida...
         span(v-else) Empezar a jugar
     CubesLoader.start-panel__loader(v-if='loading' compact label='Preparando el tablero...')
+
+  .start-panel__divider
+    span o si ya tienes acceso
+
+  form.start-panel__join(@submit.prevent='handleJoin')
+    .start-panel__grid
+      label.field
+        span.field__label Sesión remota
+        input.field__control(v-model='joinForm.sessionId' placeholder='UUID de la sesión')
+      label.field
+        span.field__label Token del jugador
+        input.field__control(v-model='joinForm.playerToken' placeholder='Token de acceso')
+    .start-panel__footer
+      .start-panel__status(v-if='joinError') {{ joinError }}
+      button.button.button--tonal(type='submit' :disabled='joining || !joinForm.sessionId || !joinForm.playerToken')
+        span(v-if='joining') Uniéndome...
+        span(v-else) Unirme a partida remota
+    CubesLoader.start-panel__loader(v-if='joining' compact label='Conectando a la mesa...')
 </template>
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import CubesLoader from './CubesLoader.vue'
 
-const emit = defineEmits(['start'])
+const emit = defineEmits(['start', 'join'])
 
 const loading = ref(false)
 const error = ref('')
+const joining = ref(false)
+const joinError = ref('')
 const selectedHand = ref(null)
 const hiddenWhiteHand = ref(Math.random() > 0.5 ? 'left' : 'right')
 const revealed = ref(false)
@@ -94,6 +115,11 @@ const form = reactive({
   blackPlayerName: 'Bot',
   colorMode: 'direct',
   color: 'white',
+})
+
+const joinForm = reactive({
+  sessionId: '',
+  playerToken: '',
 })
 
 const hands = computed(() => [
@@ -138,18 +164,35 @@ async function handleSubmit() {
   error.value = ''
 
   try {
-    await emit('start', {
-      opponent: form.opponent,
+        await emit('start', {
+      opponent: form.opponent === 'human-remote' ? 'human' : form.opponent,
       llm: form.llm || null,
       color: resolvedColor.value,
       whitePlayerName: form.whitePlayerName || 'White',
       blackPlayerName: form.blackPlayerName || (form.opponent === 'machine' ? 'Machine' : 'Black'),
       localHotseat: form.opponent === 'human',
+      includePlayerTokens: form.opponent === 'human-remote',
     })
   } catch (submitError) {
     error.value = submitError.message || 'No fue posible crear la partida'
   } finally {
     loading.value = false
+  }
+}
+
+async function handleJoin() {
+  joining.value = true
+  joinError.value = ''
+
+  try {
+    await emit('join', {
+      sessionId: joinForm.sessionId.trim(),
+      playerToken: joinForm.playerToken.trim(),
+    })
+  } catch (submitError) {
+    joinError.value = submitError.message || 'No fue posible unirse a la partida'
+  } finally {
+    joining.value = false
   }
 }
 </script>
@@ -201,6 +244,27 @@ async function handleSubmit() {
 
   &__loader {
     justify-self: center;
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--muted);
+    font-size: 0.92rem;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+  }
+
+  &__join {
+    display: grid;
+    gap: 1.25rem;
   }
 }
 

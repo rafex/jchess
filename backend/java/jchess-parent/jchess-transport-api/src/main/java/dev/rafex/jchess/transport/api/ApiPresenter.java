@@ -36,7 +36,29 @@ public final class ApiPresenter {
     }
 
     public ApiSessionAccessDto access(GameSessionAccess access, ConnectionStateView connectionStateView) {
-        ApiGameStateDto game = game(access.snapshot(), connectionStateView);
+        ApiGameStateDto snapshot = game(access.snapshot(), connectionStateView);
+        ApiGameStateDto game = new ApiGameStateDto(
+                snapshot.sessionId(),
+                snapshot.status(),
+                snapshot.result(),
+                snapshot.endReason(),
+                snapshot.turn(),
+                snapshot.humanSide(),
+                snapshot.fen(),
+                snapshot.version(),
+                snapshot.createdAt(),
+                snapshot.updatedAt(),
+                List.of(
+                        player(access.whitePlayer(), connectionStateView),
+                        player(access.blackPlayer(), connectionStateView)
+                ),
+                snapshot.moves(),
+                snapshot.legalMovesEnglish(),
+                snapshot.legalMovesSpanish(),
+                snapshot.legalMovesUci(),
+                snapshot.boardAscii(),
+                snapshot.pgn()
+        );
         ApiPlayerDto requester = access.requester() == null ? null : player(access.requester(), connectionStateView);
         return new ApiSessionAccessDto(game, requester);
     }

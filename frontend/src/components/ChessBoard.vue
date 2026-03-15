@@ -3,12 +3,16 @@
   .board-toolbar
     .pill {{ orientationLabel }}
     .pill(v-if='selectedSquare') Seleccionada {{ selectedSquare }}
+    .pill(v-if='busy && busyLabel') {{ busyLabel }}
+  .board-overlay(v-if='busy')
+    span.board-overlay__label {{ busyLabel || 'Procesando...' }}
   .board-grid
     button.board-square(
       v-for='square in orientedSquares'
       :key='square.key'
       type='button'
       :class='squareClasses(square)'
+      :disabled='!interactive || busy'
       @click='selectSquare(square)'
     )
       span.board-square__label {{ square.square }}
@@ -44,6 +48,18 @@ const props = defineProps({
     type: String,
     default: 'WHITE',
   },
+  interactive: {
+    type: Boolean,
+    default: true,
+  },
+  busy: {
+    type: Boolean,
+    default: false,
+  },
+  busyLabel: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['move-intent'])
@@ -61,12 +77,34 @@ watch(() => props.fen, () => {
 })
 
 function selectSquare(square) {
+  if (!props.interactive || props.busy) {
+    return
+  }
+
   if (selectedSquare.value && targetSquares.value.has(square.square)) {
-    const move = activeMoves.value.find((candidate) => candidate.slice(2, 4) === square.square)
+    const candidates = activeMoves.value.filter((candidate) => candidate.slice(2, 4) === square.square)
+    if (!candidates.length) {
+      selectedSquare.value = ''
+      return
+    }
+
+    if (candidates.length > 1) {
+      emit('move-intent', {
+        from: selectedSquare.value,
+        to: square.square,
+        promotion: null,
+        promotionOptions: candidates.map((move) => move.slice(4)).filter(Boolean),
+      })
+      selectedSquare.value = ''
+      return
+    }
+
+    const move = candidates[0]
     emit('move-intent', {
       from: selectedSquare.value,
       to: square.square,
       promotion: move?.length > 4 ? move.slice(4) : null,
+      promotionOptions: [],
     })
     selectedSquare.value = ''
     return
@@ -104,6 +142,7 @@ function pieceClasses(square) {
   padding: 1rem;
   display: grid;
   gap: 1rem;
+  position: relative;
 }
 
 .board-toolbar {
@@ -120,6 +159,27 @@ function pieceClasses(square) {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.board-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: rgba(8, 12, 16, 0.34);
+  backdrop-filter: blur(4px);
+  z-index: 3;
+  pointer-events: none;
+
+  &__label {
+    padding: 0.8rem 1rem;
+    border-radius: 999px;
+    background: rgba(17, 24, 31, 0.86);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-weight: 700;
+  }
+}
+
 .board-square {
   aspect-ratio: 1;
   border: 0;
@@ -132,6 +192,10 @@ function pieceClasses(square) {
 
   &:hover {
     filter: brightness(1.05);
+  }
+
+  &:disabled {
+    cursor: default;
   }
 
   &--light {

@@ -10,13 +10,21 @@
     .home-view__meta
       .pill PWA instalable
       .pill Partidas locales o vs máquina
-  StartGamePanel(@start='startGame')
+  section.home-view__install.glass-card
+    .home-view__install-copy
+      h2 Lleva JChess a tu pantalla de inicio
+      p
+        | En escritorio usa el botón
+        strong  Instalar app
+        |  del encabezado. En iPhone/iPad usa Compartir y luego
+        strong  Añadir a pantalla de inicio.
+  StartGamePanel(@start='startGame' @join='joinRemoteGame')
 </template>
 
 <script setup>
 import { useRouter } from 'vue-router'
 import StartGamePanel from '../components/StartGamePanel.vue'
-import { createGame } from '../lib/api'
+import { createGame, joinGame } from '../lib/api'
 import { useSessionStore } from '../lib/sessionStore'
 
 const router = useRouter()
@@ -32,21 +40,62 @@ async function startGame(payload) {
     BLACK: requester?.side === 'BLACK' ? requester.playerToken : null,
   }
 
+  const inviteTokens = {
+    WHITE: null,
+    BLACK: null,
+  }
+
   if (payload.localHotseat) {
     for (const player of game.players) {
       tokens[player.side] = player.playerToken
     }
   }
 
+  if (payload.includePlayerTokens) {
+    for (const player of game.players) {
+      inviteTokens[player.side] = player.playerToken
+    }
+  }
+
   sessionStore.setSession({
     sessionId: game.sessionId,
     opponent: payload.opponent,
+    requesterSide: requester?.side || payload.color.toUpperCase(),
     localHotseat: payload.localHotseat,
-    perspective: payload.color.toUpperCase(),
+    perspective: requester?.side || payload.color.toUpperCase(),
     tokens,
+    inviteTokens,
     playerNames: {
       WHITE: game.players.find((player) => player.side === 'WHITE')?.displayName || payload.whitePlayerName,
       BLACK: game.players.find((player) => player.side === 'BLACK')?.displayName || payload.blackPlayerName,
+    },
+  })
+
+  await router.push({ name: 'game', params: { sessionId: game.sessionId } })
+}
+
+async function joinRemoteGame(payload) {
+  const response = await joinGame(payload.sessionId, payload.playerToken)
+  const game = response.data.game
+  const requester = response.data.requester
+
+  sessionStore.setSession({
+    sessionId: game.sessionId,
+    opponent: 'human',
+    requesterSide: requester.side,
+    localHotseat: false,
+    perspective: requester.side,
+    tokens: {
+      WHITE: requester.side === 'WHITE' ? requester.playerToken : null,
+      BLACK: requester.side === 'BLACK' ? requester.playerToken : null,
+    },
+    inviteTokens: {
+      WHITE: null,
+      BLACK: null,
+    },
+    playerNames: {
+      WHITE: game.players.find((player) => player.side === 'WHITE')?.displayName || 'White',
+      BLACK: game.players.find((player) => player.side === 'BLACK')?.displayName || 'Black',
     },
   })
 
@@ -93,6 +142,27 @@ async function startGame(payload) {
     gap: 0.75rem;
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+
+  &__install {
+    padding: 1rem 1.25rem;
+    background: linear-gradient(180deg, rgba(23, 35, 46, 0.92), rgba(18, 28, 37, 0.88));
+  }
+
+  &__install-copy {
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      font-size: 1.08rem;
+      margin-bottom: 0.35rem;
+    }
+
+    p {
+      color: var(--muted);
+    }
   }
 }
 </style>

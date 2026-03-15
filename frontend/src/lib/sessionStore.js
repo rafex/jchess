@@ -5,7 +5,12 @@ const STORAGE_KEY = 'jchess.frontend.session'
 const state = reactive({
   sessionId: null,
   opponent: 'machine',
+  requesterSide: null,
   tokens: {
+    WHITE: null,
+    BLACK: null,
+  },
+  inviteTokens: {
     WHITE: null,
     BLACK: null,
   },
@@ -43,7 +48,9 @@ export function useSessionStore() {
     setSession(payload) {
       state.sessionId = payload.sessionId
       state.opponent = payload.opponent
+      state.requesterSide = payload.requesterSide
       state.tokens = { ...state.tokens, ...payload.tokens }
+      state.inviteTokens = { ...state.inviteTokens, ...(payload.inviteTokens || {}) }
       state.perspective = payload.perspective
       state.localHotseat = payload.localHotseat
       state.playerNames = { ...state.playerNames, ...payload.playerNames }
@@ -56,7 +63,9 @@ export function useSessionStore() {
     clear() {
       state.sessionId = null
       state.opponent = 'machine'
+      state.requesterSide = null
       state.tokens = { WHITE: null, BLACK: null }
+      state.inviteTokens = { WHITE: null, BLACK: null }
       state.perspective = 'WHITE'
       state.localHotseat = false
       state.playerNames = { WHITE: 'White', BLACK: 'Black' }
