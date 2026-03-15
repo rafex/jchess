@@ -31,10 +31,11 @@
       )
     aside.game-view__sidebar(:style='sidebarStyle')
       ClockPanel(
+        v-if='showClock'
         :white-label='clock.whiteLabel.value'
         :black-label='clock.blackLabel.value'
         :active-side='game.turn'
-        :time-control='sessionStore.state.timeControl'
+        :time-control='game.timeControl'
       )
       .glass-card.panel
         h2.panel__title Estado
@@ -242,6 +243,7 @@ const effectiveClockSide = computed(() => {
 
   return game.value.turn
 })
+const showClock = computed(() => game.value?.timeControl && game.value.timeControl !== 'untimed')
 const clock = useChessClock({
   activeSide: effectiveClockSide,
   version: computed(() => game.value?.version || 0),
@@ -520,8 +522,27 @@ async function copyInvite(invite) {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     min-height: 0;
+    padding-right: 0.2rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 179, 71, 0.65) rgba(255, 255, 255, 0.05);
+
+    &::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 999px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(255, 179, 71, 0.9), rgba(255, 124, 67, 0.8));
+      border-radius: 999px;
+      border: 2px solid rgba(10, 16, 20, 0.35);
+    }
   }
 }
 
@@ -602,6 +623,7 @@ async function copyInvite(invite) {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-height: 13rem;
   }
 }
 

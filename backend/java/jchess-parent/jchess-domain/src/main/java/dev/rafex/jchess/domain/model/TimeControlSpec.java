@@ -1,12 +1,15 @@
 package dev.rafex.jchess.domain.model;
 
-public record TimeControlSpec(int minutes, int incrementSeconds, long initialMs) {
+public record TimeControlSpec(boolean timed, int minutes, int incrementSeconds, long initialMs) {
     public static TimeControlSpec parse(String value) {
         String normalized = value == null || value.isBlank() ? "5+0" : value.trim();
+        if (normalized.equalsIgnoreCase("untimed") || normalized.equalsIgnoreCase("casual")) {
+            return new TimeControlSpec(false, 0, 0, 0L);
+        }
         String[] parts = normalized.split("\\+");
         int minutes = parseInt(parts, 0, 5);
         int increment = parseInt(parts, 1, 0);
-        return new TimeControlSpec(minutes, increment, minutes * 60_000L);
+        return new TimeControlSpec(true, minutes, increment, minutes * 60_000L);
     }
 
     private static int parseInt(String[] parts, int index, int fallback) {

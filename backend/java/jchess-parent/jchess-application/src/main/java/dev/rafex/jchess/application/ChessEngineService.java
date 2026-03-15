@@ -354,13 +354,16 @@ public final class ChessEngineService implements EngineFacade {
     private GameState appendMove(GameState current, String submittedNotation, Move move) {
         Instant now = Instant.now();
         Side actingSide = current.session().currentPosition().sideToMove();
+        TimeControlSpec timeControl = TimeControlSpec.parse(current.session().timeControl());
         long whiteClockMs = current.session().remainingClockMs(Side.WHITE, now);
         long blackClockMs = current.session().remainingClockMs(Side.BLACK, now);
-        long incrementMs = TimeControlSpec.parse(current.session().timeControl()).incrementSeconds() * 1000L;
-        if (actingSide == Side.WHITE) {
-            whiteClockMs += incrementMs;
-        } else {
-            blackClockMs += incrementMs;
+        if (timeControl.timed()) {
+            long incrementMs = timeControl.incrementSeconds() * 1000L;
+            if (actingSide == Side.WHITE) {
+                whiteClockMs += incrementMs;
+            } else {
+                blackClockMs += incrementMs;
+            }
         }
 
         Position before = current.session().currentPosition();
@@ -396,6 +399,11 @@ public final class ChessEngineService implements EngineFacade {
     private GameState refreshClockState(GameState current, boolean persistIfChanged) {
         GameSession session = current.session();
         if (session.status() != GameStatus.ACTIVE) {
+            return current;
+        }
+
+        TimeControlSpec timeControl = TimeControlSpec.parse(session.timeControl());
+        if (!timeControl.timed()) {
             return current;
         }
 

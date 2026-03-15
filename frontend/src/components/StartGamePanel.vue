@@ -16,7 +16,7 @@
           option(value='machine') Máquina
           option(value='human') Humano local
           option(value='human-remote') Humano remoto
-      label.field
+      label.field(v-if='form.opponent !== "machine"')
         span.field__label Reloj
         select.field__control(v-model='form.timeControl')
           option(value='3+0') 3 min
@@ -24,6 +24,11 @@
           option(value='10+0') 10 min
           option(value='10+5') 10 min + 5s
           option(value='15+10') 15 min + 10s
+      .start-panel__hint-card(v-else)
+        strong Sin reloj por defecto
+        p
+          | Contra la máquina usamos modo casual para que no haya desventaja por respuestas
+          |  casi instantáneas. Más adelante podemos añadir un modo competitivo separado.
       label.field(v-if='form.opponent === "machine"')
         span.field__label Motor remoto
         select.field__control(v-model='form.llm')
@@ -178,7 +183,7 @@ async function handleSubmit() {
       opponent: form.opponent === 'human-remote' ? 'human' : form.opponent,
       llm: form.llm || null,
       color: resolvedColor.value,
-      timeControl: form.timeControl,
+      timeControl: form.opponent === 'machine' ? 'untimed' : form.timeControl,
       whitePlayerName: form.whitePlayerName || 'White',
       blackPlayerName: form.blackPlayerName || (form.opponent === 'machine' ? 'Machine' : 'Black'),
       localHotseat: form.opponent === 'human',
@@ -255,6 +260,24 @@ async function handleJoin() {
 
   &__loader {
     justify-self: center;
+  }
+
+  &__hint-card {
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    display: grid;
+    gap: 0.4rem;
+
+    strong {
+      font-size: 0.96rem;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
   }
 
   &__divider {
