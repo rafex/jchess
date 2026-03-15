@@ -13,19 +13,24 @@ import dev.rafex.jchess.core.engine.PositionUpdater;
 import dev.rafex.jchess.core.engine.SearchEngine;
 import dev.rafex.jchess.domain.model.EngineInfo;
 import dev.rafex.jchess.domain.model.GameEndReason;
+import dev.rafex.jchess.domain.model.GamePlayerAccess;
 import dev.rafex.jchess.domain.model.GameResult;
 import dev.rafex.jchess.domain.model.GameSession;
+import dev.rafex.jchess.domain.model.GameSessionAccess;
 import dev.rafex.jchess.domain.model.GameSnapshot;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.GameStatus;
 import dev.rafex.jchess.domain.model.LlmProvider;
 import dev.rafex.jchess.domain.model.Move;
+import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.NotationLanguage;
 import dev.rafex.jchess.domain.model.ParticipantType;
+import dev.rafex.jchess.domain.model.PieceType;
 import dev.rafex.jchess.domain.model.Position;
 import dev.rafex.jchess.domain.model.RecordedMove;
 import dev.rafex.jchess.domain.model.Side;
+import dev.rafex.jchess.domain.model.Square;
 import dev.rafex.jchess.ports.outbound.EngineTelemetry;
 import dev.rafex.jchess.ports.outbound.GameRepository;
 import dev.rafex.jchess.ports.outbound.MachineMovePort;
@@ -121,6 +126,11 @@ public final class ChessEngineService implements EngineFacade {
 
     @Override
     public GameSnapshot startGame(GameStartRequest request) {
+        return startGameAccess(request).snapshot();
+    }
+
+    @Override
+    public GameSessionAccess startGameAccess(GameStartRequest request) {
         gameRepository.initialize();
         Side humanSide = request.requestedHumanSide() == null
                 ? (ThreadLocalRandom.current().nextBoolean() ? Side.WHITE : Side.BLACK)
@@ -130,6 +140,7 @@ public final class ChessEngineService implements EngineFacade {
         ParticipantType whiteParticipant = humanSide == Side.WHITE ? ParticipantType.HUMAN : opponentType;
         ParticipantType blackParticipant = humanSide == Side.BLACK ? ParticipantType.HUMAN : opponentType;
 
+        Instant createdAt = Instant.now();
         GameSession session = new GameSession(
                 UUID.randomUUID(),
                 whiteParticipant,
@@ -140,22 +151,35 @@ public final class ChessEngineService implements EngineFacade {
                 GameStatus.ACTIVE,
                 GameResult.IN_PROGRESS,
                 GameEndReason.NONE,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
                 request.whitePlayerName(),
                 request.blackPlayerName(),
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
                 0,
-                Instant.now()
+                createdAt,
+                createdAt
         );
 
         GameState preparedState = autoPlayMachineTurnIfNeeded(new GameState(session, List.of()));
         persist(preparedState, -1);
         telemetry.record("session.started", preparedState.session().sessionId().toString());
-        return snapshot(preparedState);
+        return sessionAccess(preparedState, preparedState.session().playerAccess(humanSide));
     }
 
     @Override
     public GameSnapshot loadGame(UUID sessionId) {
         gameRepository.initialize();
         return snapshot(loadGameState(sessionId));
+    }
+
+    @Override
+    public GameSessionAccess joinGame(UUID sessionId, String playerToken) {
+        gameRepository.initialize();
+        GameState state = loadGameState(sessionId);
+        Side side = state.session().sideForToken(playerToken);
+        return sessionAccess(state, state.session().playerAccess(side));
     }
 
     @Override
@@ -169,6 +193,24 @@ public final class ChessEngineService implements EngineFacade {
         Move resolved = moveNotationService.parse(position, notation, legalMoves);
         GameState afterHumanMove = appendMove(current, notation, resolved);
         GameState finalState = autoPlayMachineTurnIfNeeded(afterHumanMove);
+
+        persist(finalState, current.session().version());
+        telemetry.record("move.saved", sessionId + " :: " + resolved.uci());
+        return snapshot(finalState);
+    }
+
+    @Override
+    public GameSnapshot submitMove(UUID sessionId, MoveRequest moveRequest) {
+        gameRepository.initialize();
+        GameState current = requireActive(loadGameState(sessionId));
+        Side actingSide = current.session().sideForToken(moveRequest.playerToken());
+        ensureSideToMove(current, actingSide);
+
+        Position position = current.session().currentPosition();
+        List<Move> legalMoves = legalMoves(position);
+        Move resolved = resolveStructuredMove(moveRequest, legalMoves);
+        GameState nextState = appendMove(current, moveRequest.from() + moveRequest.to(), resolved);
+        GameState finalState = autoPlayMachineTurnIfNeeded(nextState);
 
         persist(finalState, current.session().version());
         telemetry.record("move.saved", sessionId + " :: " + resolved.uci());
@@ -237,6 +279,16 @@ public final class ChessEngineService implements EngineFacade {
         }
     }
 
+    private void ensureSideToMove(GameState current, Side actingSide) {
+        Side sideToMove = current.session().currentPosition().sideToMove();
+        if (sideToMove != actingSide) {
+            throw new IllegalStateException("it is not your turn; waiting for " + sideToMove);
+        }
+        if (current.session().participantFor(actingSide) == ParticipantType.MACHINE) {
+            throw new IllegalStateException("machine-controlled side cannot be moved manually");
+        }
+    }
+
     private GameState autoPlayMachineTurnIfNeeded(GameState gameState) {
         GameState current = gameState;
         while (current.session().status() == GameStatus.ACTIVE && current.session().machineToMove()) {
@@ -270,6 +322,19 @@ public final class ChessEngineService implements EngineFacade {
         }
 
         return chooseMove(position);
+    }
+
+    private Move resolveStructuredMove(MoveRequest moveRequest, List<Move> legalMoves) {
+        Square from = Square.fromAlgebraic(moveRequest.from());
+        Square to = Square.fromAlgebraic(moveRequest.to());
+        PieceType promotion = moveRequest.promotion();
+
+        return legalMoves.stream()
+                .filter(move -> move.from().equals(from))
+                .filter(move -> move.to().equals(to))
+                .filter(move -> move.promotion() == promotion)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("illegal move: " + moveRequest.from() + moveRequest.to()));
     }
 
     private GameState appendMove(GameState current, String submittedNotation, Move move) {
@@ -339,14 +404,28 @@ public final class ChessEngineService implements EngineFacade {
                 gameState.session().preferredHumanSide(),
                 gameState.session().whiteParticipant(),
                 gameState.session().blackParticipant(),
+                gameState.session().whitePlayerId(),
+                gameState.session().blackPlayerId(),
                 gameState.session().whitePlayerName(),
                 gameState.session().blackPlayerName(),
                 gameState.session().version(),
+                gameState.session().createdAt(),
+                gameState.session().updatedAt(),
                 gameState.moves(),
                 moveNotationService.toNotations(position, legalMoves, NotationLanguage.ENGLISH),
                 moveNotationService.toNotations(position, legalMoves, NotationLanguage.SPANISH),
+                legalMoves.stream().map(Move::uci).toList(),
                 boardAsciiRenderer.render(position),
                 pgnExporter.export(gameState)
+        );
+    }
+
+    private GameSessionAccess sessionAccess(GameState gameState, GamePlayerAccess requester) {
+        return new GameSessionAccess(
+                snapshot(gameState),
+                gameState.session().playerAccess(Side.WHITE),
+                gameState.session().playerAccess(Side.BLACK),
+                requester
         );
     }
 }

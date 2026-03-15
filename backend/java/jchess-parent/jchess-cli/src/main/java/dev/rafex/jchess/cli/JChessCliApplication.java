@@ -12,7 +12,7 @@ import dev.rafex.jchess.domain.model.LlmProvider;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Side;
 import dev.rafex.jchess.ports.outbound.EngineTelemetry;
-import dev.rafex.jchess.transport.websocket.JChessWebSocketServer;
+import dev.rafex.jchess.transport.http.JChessHttpServer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -44,7 +44,7 @@ public final class JChessCliApplication {
         switch (cliCommand.action()) {
             case HELP -> System.out.println(helpText());
             case LIST_THEMES -> printThemes(boardRenderer, cliCommand.boardTheme());
-            case SERVER_START -> new JChessWebSocketServer(engineFacade, cliCommand.port()).startAndBlock();
+            case SERVER_START -> new JChessHttpServer(engineFacade, cliCommand.port()).startAndBlock();
             case GAME_NEW -> handleGameNew(engineFacade, boardRenderer, cliCommand);
             case GAME_SHOW -> renderFullSnapshot(engineFacade.loadGame(requireSession(cliCommand)), boardRenderer, cliCommand.boardTheme());
             case GAME_MOVE -> renderFullSnapshot(engineFacade.submitMove(requireSession(cliCommand), requireValue(cliCommand.move(), "move")), boardRenderer, cliCommand.boardTheme());

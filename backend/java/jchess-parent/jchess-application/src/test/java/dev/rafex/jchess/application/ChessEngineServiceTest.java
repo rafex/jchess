@@ -3,6 +3,7 @@ package dev.rafex.jchess.application;
 import dev.rafex.jchess.domain.model.GameStartRequest;
 import dev.rafex.jchess.domain.model.GameState;
 import dev.rafex.jchess.domain.model.LlmProvider;
+import dev.rafex.jchess.domain.model.MoveRequest;
 import dev.rafex.jchess.domain.model.ParticipantType;
 import dev.rafex.jchess.domain.model.Side;
 import dev.rafex.jchess.ports.outbound.EngineTelemetry;
@@ -62,6 +63,18 @@ final class ChessEngineServiceTest {
         assertEquals(2, afterMove.moves().size());
         assertEquals("e5", afterMove.moves().getLast().submittedNotation());
         assertFalse(afterMove.legalMovesEnglish().isEmpty());
+    }
+
+    @Test
+    void shouldAcceptStructuredMoveWithPlayerToken() {
+        InMemoryGameRepository repository = new InMemoryGameRepository();
+        ChessEngineService service = new ChessEngineService(repository, new NoOpTelemetry(), new NoOpMachineMovePort());
+
+        var started = service.startGameAccess(new GameStartRequest(Side.WHITE, ParticipantType.HUMAN, null, "Alice", "Bob"));
+        var afterMove = service.submitMove(started.snapshot().sessionId(), MoveRequest.of(started.requester().playerToken(), "e2", "e4", null));
+
+        assertEquals("e2e4", afterMove.moves().getFirst().uci());
+        assertTrue(afterMove.legalMovesUci().contains("a7a6") || afterMove.legalMovesUci().contains("a7a5"));
     }
 
     @Test

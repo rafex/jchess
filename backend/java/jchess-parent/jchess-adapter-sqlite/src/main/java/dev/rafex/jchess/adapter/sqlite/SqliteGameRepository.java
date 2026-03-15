@@ -98,10 +98,15 @@ public final class SqliteGameRepository implements GameRepository {
                         status text not null,
                         result text not null default 'IN_PROGRESS',
                         end_reason text not null default 'NONE',
+                        white_player_id text not null default '',
+                        black_player_id text not null default '',
                         white_player_name text not null default 'white',
                         black_player_name text not null default 'black',
+                        white_player_token text not null default '',
+                        black_player_token text not null default '',
                         version integer not null default 0,
-                        created_at text not null
+                        created_at text not null,
+                        updated_at text not null default '1970-01-01T00:00:00Z'
                     )
                     """);
             statement.executeUpdate("""
@@ -121,9 +126,14 @@ public final class SqliteGameRepository implements GameRepository {
             statement.executeUpdate("create index if not exists idx_game_move_session on game_move(session_id)");
             ensureColumn(statement, "game_session", "result", "text not null default 'IN_PROGRESS'");
             ensureColumn(statement, "game_session", "end_reason", "text not null default 'NONE'");
+            ensureColumn(statement, "game_session", "white_player_id", "text not null default ''");
+            ensureColumn(statement, "game_session", "black_player_id", "text not null default ''");
             ensureColumn(statement, "game_session", "white_player_name", "text not null default 'white'");
             ensureColumn(statement, "game_session", "black_player_name", "text not null default 'black'");
+            ensureColumn(statement, "game_session", "white_player_token", "text not null default ''");
+            ensureColumn(statement, "game_session", "black_player_token", "text not null default ''");
             ensureColumn(statement, "game_session", "version", "integer not null default 0");
+            ensureColumn(statement, "game_session", "updated_at", "text not null default '1970-01-01T00:00:00Z'");
             ensureColumn(statement, "game_move", "fen_before", "text not null default ''");
             ensureColumn(statement, "game_move", "fen_after", "text not null default ''");
         }
@@ -153,11 +163,16 @@ public final class SqliteGameRepository implements GameRepository {
                     status,
                     result,
                     end_reason,
+                    white_player_id,
+                    black_player_id,
                     white_player_name,
                     black_player_name,
+                    white_player_token,
+                    black_player_token,
                     version,
-                    created_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at,
+                    updated_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(session_id) do update set
                     white_participant = excluded.white_participant,
                     black_participant = excluded.black_participant,
@@ -167,10 +182,15 @@ public final class SqliteGameRepository implements GameRepository {
                     status = excluded.status,
                     result = excluded.result,
                     end_reason = excluded.end_reason,
+                    white_player_id = excluded.white_player_id,
+                    black_player_id = excluded.black_player_id,
                     white_player_name = excluded.white_player_name,
                     black_player_name = excluded.black_player_name,
+                    white_player_token = excluded.white_player_token,
+                    black_player_token = excluded.black_player_token,
                     version = excluded.version,
-                    created_at = excluded.created_at
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at
                 """ + (checkVersion ? " where game_session.version = ?" : "");
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -184,12 +204,17 @@ public final class SqliteGameRepository implements GameRepository {
             statement.setString(7, session.status().name());
             statement.setString(8, session.result().name());
             statement.setString(9, session.endReason().name());
-            statement.setString(10, session.whitePlayerName());
-            statement.setString(11, session.blackPlayerName());
-            statement.setLong(12, session.version());
-            statement.setString(13, session.createdAt().toString());
+            statement.setString(10, session.whitePlayerId().toString());
+            statement.setString(11, session.blackPlayerId().toString());
+            statement.setString(12, session.whitePlayerName());
+            statement.setString(13, session.blackPlayerName());
+            statement.setString(14, session.whitePlayerToken());
+            statement.setString(15, session.blackPlayerToken());
+            statement.setLong(16, session.version());
+            statement.setString(17, session.createdAt().toString());
+            statement.setString(18, session.updatedAt().toString());
             if (checkVersion) {
-                statement.setLong(14, expectedVersion);
+                statement.setLong(19, expectedVersion);
             }
             return statement.executeUpdate() > 0;
         }
@@ -242,10 +267,15 @@ public final class SqliteGameRepository implements GameRepository {
                     status,
                     result,
                     end_reason,
+                    white_player_id,
+                    black_player_id,
                     white_player_name,
                     black_player_name,
+                    white_player_token,
+                    black_player_token,
                     version,
-                    created_at
+                    created_at,
+                    updated_at
                 from game_session
                 where session_id = ?
                 """)) {
@@ -265,10 +295,15 @@ public final class SqliteGameRepository implements GameRepository {
                         GameStatus.valueOf(resultSet.getString("status")),
                         GameResult.valueOf(resultSet.getString("result")),
                         GameEndReason.valueOf(resultSet.getString("end_reason")),
+                        UUID.fromString(resultSet.getString("white_player_id")),
+                        UUID.fromString(resultSet.getString("black_player_id")),
                         resultSet.getString("white_player_name"),
                         resultSet.getString("black_player_name"),
+                        resultSet.getString("white_player_token"),
+                        resultSet.getString("black_player_token"),
                         resultSet.getLong("version"),
-                        Instant.parse(resultSet.getString("created_at"))
+                        Instant.parse(resultSet.getString("created_at")),
+                        Instant.parse(resultSet.getString("updated_at"))
                 );
             }
         }

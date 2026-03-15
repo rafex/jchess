@@ -33,7 +33,7 @@
         </dependency>
         <dependency>
             <groupId>dev.rafex.jchess</groupId>
-            <artifactId>jchess-transport-websocket</artifactId>
+            <artifactId>jchess-transport-http</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
