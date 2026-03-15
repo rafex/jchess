@@ -12,7 +12,15 @@
       @click='selectSquare(square)'
     )
       span.board-square__label {{ square.square }}
-      span.board-square__piece(:class='pieceClasses(square)') {{ square.pieceGlyph }}
+      img.board-square__piece(
+        v-if='square.pieceAsset'
+        :class='pieceClasses(square)'
+        :src='square.pieceAsset'
+        :alt='square.pieceAlt'
+        loading='lazy'
+        decoding='async'
+        draggable='false'
+      )
 </template>
 
 <script setup>
@@ -152,22 +160,20 @@ function pieceClasses(square) {
   }
 
   &__piece {
-    transform: translateY(0.1rem);
-    line-height: 1;
+    width: min(74%, 4.2rem);
+    height: min(74%, 4.2rem);
+    object-fit: contain;
+    transform: translateY(0.08rem);
     transition: transform 0.12s ease, filter 0.12s ease;
+    user-select: none;
+    pointer-events: none;
 
     &--white {
-      color: #fff8ec;
-      text-shadow:
-        0 1px 0 rgba(95, 70, 33, 0.28),
-        0 0 12px rgba(255, 249, 236, 0.18);
+      filter: drop-shadow(0 2px 4px rgba(78, 54, 26, 0.16));
     }
 
     &--black {
-      color: #1c1711;
-      text-shadow:
-        0 1px 0 rgba(255, 244, 223, 0.15),
-        0 0 10px rgba(8, 6, 4, 0.12);
+      filter: drop-shadow(0 2px 4px rgba(255, 245, 228, 0.08));
     }
 
     &--empty {

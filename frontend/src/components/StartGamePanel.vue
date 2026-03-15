@@ -72,10 +72,12 @@
       button.button.button--primary(type='submit' :disabled='loading || !resolvedColor')
         span(v-if='loading') Creando partida...
         span(v-else) Empezar a jugar
+    CubesLoader.start-panel__loader(v-if='loading' compact label='Preparando el tablero...')
 </template>
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import CubesLoader from './CubesLoader.vue'
 
 const emit = defineEmits(['start'])
 
@@ -193,6 +195,10 @@ async function handleSubmit() {
   &__status {
     color: var(--danger);
     font-weight: 600;
+  }
+
+  &__loader {
+    justify-self: center;
   }
 }
 

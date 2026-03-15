@@ -55,13 +55,14 @@
         p.panel__message {{ feedback }}
 .page-shell.game-view(v-else)
   .glass-card.panel
-    p Cargando partida...
+    CubesLoader(label='Cargando partida...')
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChessBoard from '../components/ChessBoard.vue'
+import CubesLoader from '../components/CubesLoader.vue'
 import { loadGame, resignGame, submitMove } from '../lib/api'
 import { useSessionStore } from '../lib/sessionStore'
 
