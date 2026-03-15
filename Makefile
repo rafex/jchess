@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 BACKEND_DIR ?= backend
 
-.PHONY: help build build-without-tests test clean verify cli cli-new server
+.PHONY: help build build-without-tests test clean verify cli cli-new server frontend-install frontend-dev frontend-build
 
 help:
 	@echo "Targets:"
@@ -15,7 +15,10 @@ help:
 	@echo "  make verify              -> run backend verification"
 	@echo "  make cli                 -> run CLI help"
 	@echo "  make cli-new             -> create a demo game"
-	@echo "  make server              -> start backend WebSocket server"
+	@echo "  make server              -> start backend HTTP/WebSocket server"
+	@echo "  make frontend-install    -> install frontend dependencies"
+	@echo "  make frontend-dev        -> start frontend Vite server"
+	@echo "  make frontend-build      -> build frontend"
 
 build:
 	$(MAKE) -C $(BACKEND_DIR) build
@@ -41,3 +44,11 @@ cli-new:
 server:
 	$(MAKE) -C $(BACKEND_DIR) server
 
+frontend-install:
+	$(MAKE) -C frontend install
+
+frontend-dev:
+	$(MAKE) -C frontend dev
+
+frontend-build:
+	$(MAKE) -C frontend build

@@ -1,0 +1,106 @@
+:root {
+  --bg: #0c1217;
+  --bg-elevated: rgba(11, 22, 31, 0.82);
+  --panel: rgba(18, 32, 43, 0.88);
+  --panel-strong: rgba(20, 39, 53, 0.96);
+  --line: rgba(153, 187, 201, 0.18);
+  --text: #f3ece1;
+  --muted: #b3c2c7;
+  --accent: #ffb347;
+  --accent-strong: #ff7c43;
+  --success: #6ee7b7;
+  --danger: #ff7b72;
+  --board-light: #e8d6b7;
+  --board-dark: #82674b;
+  --board-highlight: rgba(255, 179, 71, 0.45);
+  --board-legal: rgba(110, 231, 183, 0.42);
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Avenir Next', 'Segoe UI', sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(255, 179, 71, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(89, 146, 255, 0.18), transparent 24%),
+    linear-gradient(160deg, #0a1014 0%, #102330 48%, #081016 100%);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+.page-shell {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+}
+
+.glass-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  border-radius: 28px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.button {
+  border: 0;
+  border-radius: 16px;
+  padding: 0.9rem 1.2rem;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  &--primary {
+    color: #141414;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+    box-shadow: 0 14px 28px rgba(255, 124, 67, 0.28);
+  }
+
+  &--secondary {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+}

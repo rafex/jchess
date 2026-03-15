@@ -23,6 +23,12 @@ public final class JChessHttpServer {
     }
 
     public void startAndBlock() throws Exception {
+        ServerRuntime runtime = createRuntime();
+        runtime.runner().start();
+        runtime.runner().await();
+    }
+
+    ServerRuntime createRuntime() {
         var jsonCodec = JsonCodecBuilder.create().build();
         var registry = new WebSocketSessionRegistry();
 
@@ -35,7 +41,7 @@ public final class JChessHttpServer {
         routes.add("/*", new NotFoundHandler(jsonCodec));
 
         JettyServerConfig config = new JettyServerConfig(port, 200, 8, 30000, "jchess-http", "dev");
-        JettyServerRunner runner = JettyServerFactory.create(config, routes, jsonCodec);
+        JettyServerRunner runner = JettyServerFactory.create(config, routes, jsonCodec, null, java.util.List.of(), java.util.List.of(new CorsMiddleware()));
 
         ContextHandler webSocketContext = new ContextHandler("/ws");
         WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(runner.server(), webSocketContext, container ->
@@ -50,7 +56,9 @@ public final class JChessHttpServer {
         contexts.setHandlers(new Handler[]{webSocketContext, apiContext});
         runner.server().setHandler(contexts);
 
-        runner.start();
-        runner.await();
+        return new ServerRuntime(runner, registry);
+    }
+
+    record ServerRuntime(JettyServerRunner runner, WebSocketSessionRegistry registry) {
     }
 }

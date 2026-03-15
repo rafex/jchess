@@ -119,6 +119,8 @@ public final class SessionWebSocket {
 
     private void handleUndo(Map<String, Object> payload) {
         UUID sessionId = UUID.fromString(required(payload, "sessionId"));
+        String playerToken = resolvePlayerToken(payload, session);
+        engineFacade.joinGame(sessionId, playerToken);
         GameSnapshot snapshot = engineFacade.undoLastMove(sessionId);
         registry.broadcast(sessionId, json(ApiEnvelope.ok("move_undone", apiPresenter.game(snapshot, connectionState(sessionId)).toMap(false))));
     }
