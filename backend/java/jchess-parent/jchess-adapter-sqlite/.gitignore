@@ -1,2 +1,59 @@
+# Build outputs
 /target/
+/bin/
+/out/
 
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+
+# Eclipse IDE
+/.classpath
+/.project
+/.settings/
+/.factorypath
+/.metadata/
+
+# IntelliJ IDEA
+*.iml
+*.ipr
+*.iws
+/.idea/
+
+# Visual Studio Code
+/.vscode/
+
+# Compiled class files
+*.class
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.orig
+*.rej
+
+# Coverage reports
+jacoco.exec
+*.exec
+coverage/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Database files (SQLite)
+*.db
+*.sqlite
