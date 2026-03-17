@@ -6,4 +6,4 @@
 /*.db-*
 /*.log
 /.env
-
+.claude/
