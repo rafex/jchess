@@ -1,0 +1,177 @@
+---
+name: Deploy jChess
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Tag de imagen a desplegar (opcional, formato vN.YYYYmmDD[-N])'
+        required: false
+        default: ''
+        type: string
+  push:
+    tags:
+      - 'v*.*'
+    paths:
+      - 'helm/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      K3S_NAMESPACE: jchess
+      BACKEND_RELEASE: jchess-backend
+      FRONTEND_RELEASE: jchess-frontend
+      BACKEND_CHART: ./helm/jchess-backend
+      FRONTEND_CHART: ./helm/jchess-frontend
+      BACKEND_IMAGE: ghcr.io/rafex/jchess-backend
+      FRONTEND_IMAGE: ghcr.io/rafex/jchess-frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Resolve deploy image tag
+        id: deploy_tag
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version_tag }}" ]; then
+            IMAGE_TAG="${{ github.event.inputs.version_tag }}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            IMAGE_TAG="${GITHUB_REF_NAME}"
+          else
+            IMAGE_TAG="latest"
+          fi
+
+          if [ "$IMAGE_TAG" != "latest" ] && ! echo "$IMAGE_TAG" | grep -Eq '^v[0-9]+\.[0-9]{8}(-[0-9]+)?$'; then
+            echo "Formato de tag invalido: $IMAGE_TAG"
+            echo "Formato esperado: vN.YYYYmmDD[-N]"
+            exit 1
+          fi
+
+          echo "value=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Deploy image tag: $IMAGE_TAG"
+
+      - name: Ensure namespace exists
+        run: |
+          kubectl get namespace "$K3S_NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$K3S_NAMESPACE"
+
+      - name: Lint charts
+        run: |
+          helm lint "$BACKEND_CHART"
+          helm lint "$FRONTEND_CHART"
+
+      - name: Deploy backend
+        id: deploy_backend
+        continue-on-error: true
+        run: |
+          helm upgrade --install "$BACKEND_RELEASE" "$BACKEND_CHART" \
+            --namespace "$K3S_NAMESPACE" \
+            --set image.repository="$BACKEND_IMAGE" \
+            --set image.tag="${{ steps.deploy_tag.outputs.value }}" \
+            --wait --timeout 5m
+
+      - name: Deploy frontend
+        id: deploy_frontend
+        continue-on-error: true
+        run: |
+          helm upgrade --install "$FRONTEND_RELEASE" "$FRONTEND_CHART" \
+            --namespace "$K3S_NAMESPACE" \
+            --set image.repository="$FRONTEND_IMAGE" \
+            --set image.tag="${{ steps.deploy_tag.outputs.value }}" \
+            --wait --timeout 5m
+
+      - name: Show rollout status
+        id: rollout_status
+        continue-on-error: true
+        run: |
+          kubectl -n "$K3S_NAMESPACE" rollout status deployment/"$BACKEND_RELEASE" --timeout=180s
+          kubectl -n "$K3S_NAMESPACE" rollout status deployment/"$FRONTEND_RELEASE" --timeout=180s
+
+      - name: Dump Helm and Kubernetes diagnostics
+        if: always()
+        run: |
+          dump_dir="$RUNNER_TEMP/helm-dump"
+          mkdir -p "$dump_dir"
+
+          {
+            echo "backend_release=$BACKEND_RELEASE"
+            echo "frontend_release=$FRONTEND_RELEASE"
+            echo "namespace=$K3S_NAMESPACE"
+            echo "image_tag=${{ steps.deploy_tag.outputs.value }}"
+            echo "deploy_backend_outcome=${{ steps.deploy_backend.outcome }}"
+            echo "deploy_frontend_outcome=${{ steps.deploy_frontend.outcome }}"
+            echo "rollout_status_outcome=${{ steps.rollout_status.outcome }}"
+          } > "$dump_dir/summary.txt"
+
+          for RELEASE in "$BACKEND_RELEASE" "$FRONTEND_RELEASE"; do
+            helm status "$RELEASE" --namespace "$K3S_NAMESPACE" > "$dump_dir/helm-status-${RELEASE}.txt" 2>&1 || true
+            helm get all "$RELEASE" --namespace "$K3S_NAMESPACE" > "$dump_dir/helm-get-all-${RELEASE}.txt" 2>&1 || true
+            helm get values "$RELEASE" --namespace "$K3S_NAMESPACE" -a > "$dump_dir/helm-values-${RELEASE}.yaml" 2>&1 || true
+            helm get manifest "$RELEASE" --namespace "$K3S_NAMESPACE" > "$dump_dir/helm-manifest-${RELEASE}.yaml" 2>&1 || true
+            helm history "$RELEASE" --namespace "$K3S_NAMESPACE" > "$dump_dir/helm-history-${RELEASE}.txt" 2>&1 || true
+          done
+
+          kubectl -n "$K3S_NAMESPACE" get deploy -o wide > "$dump_dir/kubectl-deployments.txt" 2>&1 || true
+          kubectl -n "$K3S_NAMESPACE" get rs -o wide > "$dump_dir/kubectl-replicasets.txt" 2>&1 || true
+          kubectl -n "$K3S_NAMESPACE" get pods -o wide > "$dump_dir/kubectl-pods.txt" 2>&1 || true
+          kubectl -n "$K3S_NAMESPACE" get svc -o wide > "$dump_dir/kubectl-services.txt" 2>&1 || true
+          kubectl -n "$K3S_NAMESPACE" get ingress -o yaml > "$dump_dir/kubectl-ingress.yaml" 2>&1 || true
+          kubectl -n "$K3S_NAMESPACE" get events --sort-by=.lastTimestamp > "$dump_dir/kubectl-events.txt" 2>&1 || true
+          kubectl -n "$K3S_NAMESPACE" get hpa -o wide > "$dump_dir/kubectl-hpa.txt" 2>&1 || true
+
+          for RELEASE in "$BACKEND_RELEASE" "$FRONTEND_RELEASE"; do
+            kubectl -n "$K3S_NAMESPACE" describe deployment/"$RELEASE" > "$dump_dir/kubectl-describe-${RELEASE}.txt" 2>&1 || true
+            kubectl -n "$K3S_NAMESPACE" logs deployment/"$RELEASE" --all-containers --tail=200 \
+              > "$dump_dir/kubectl-logs-${RELEASE}.txt" 2>&1 || true
+          done
+
+      - name: Upload Helm deployment dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jchess-helm-dump-${{ github.run_id }}
+          path: ${{ runner.temp }}/helm-dump
+          if-no-files-found: error
+
+      - name: Print diagnostics on failure
+        if: steps.deploy_backend.outcome == 'failure' || steps.deploy_frontend.outcome == 'failure' || steps.rollout_status.outcome == 'failure'
+        run: |
+          dump_dir="$RUNNER_TEMP/helm-dump"
+          echo "=== Deploy summary ==="
+          cat "$dump_dir/summary.txt" || true
+          echo
+          echo "=== Recent events ==="
+          tail -n 50 "$dump_dir/kubectl-events.txt" || true
+          echo
+          for RELEASE in "$BACKEND_RELEASE" "$FRONTEND_RELEASE"; do
+            echo "=== Deployment describe: $RELEASE ==="
+            cat "$dump_dir/kubectl-describe-${RELEASE}.txt" || true
+            echo
+            echo "=== Logs: $RELEASE ==="
+            cat "$dump_dir/kubectl-logs-${RELEASE}.txt" || true
+            echo
+          done
+
+      - name: Fail if deploy did not succeed
+        if: steps.deploy_backend.outcome == 'failure' || steps.deploy_frontend.outcome == 'failure' || steps.rollout_status.outcome == 'failure'
+        run: |
+          echo "Helm deploy no alcanzo estado Ready dentro del timeout" >&2
+          exit 1
+
+      - name: Print deployed image references
+        if: steps.deploy_backend.outcome == 'success' && steps.deploy_frontend.outcome == 'success'
+        run: |
+          TAG="${{ steps.deploy_tag.outputs.value }}"
+          echo "Backend:  ${BACKEND_IMAGE}:${TAG}"
+          echo "Frontend: ${FRONTEND_IMAGE}:${TAG}"
+          echo "Domain:   jchess.rafex.app"

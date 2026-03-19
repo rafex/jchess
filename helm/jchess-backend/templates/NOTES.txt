@@ -1,0 +1,5 @@
+1. Nombre del release: {{ .Release.Name }}
+2. Servicio:
+   kubectl get svc -n {{ .Release.Namespace }} {{ include "jchess-backend.fullname" . }}
+3. Logs:
+   kubectl logs -n {{ .Release.Namespace }} deploy/{{ include "jchess-backend.fullname" . }} -f
