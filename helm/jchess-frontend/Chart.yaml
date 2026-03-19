@@ -1,0 +1,6 @@
+apiVersion: v2
+name: jchess-frontend
+description: Helm chart para desplegar jChess frontend (Vue 3 + nginx)
+type: application
+version: 0.1.0
+appVersion: "latest"
