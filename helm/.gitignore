@@ -1,0 +1,23 @@
+# Backup files
+*.bak
+*.backup
+*.old
+*.save
+*.tmp
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
